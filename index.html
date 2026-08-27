@@ -925,8 +925,8 @@
     <div class="panel" id="seller-gate">
       <div class="gate-wrap">
         <h2 style="margin-bottom:10px;">Seller Access</h2>
-        <div class="sub" style="margin-bottom:16px;">Enter your name and password to view and manage orders.</div>
-        <input type="text" id="gate-name-input" placeholder="Your name" autocomplete="off" style="margin-bottom:10px;">
+        <div class="sub" style="margin-bottom:16px;">Enter your username and password to view and manage orders.</div>
+        <input type="text" id="gate-name-input" placeholder="Username" autocomplete="off" style="margin-bottom:10px;">
         <input type="password" id="gate-password-input" placeholder="Password" autocomplete="off">
         <div class="gate-error" id="gate-error"></div>
         <button class="btn btn-primary" id="gate-submit-btn">Unlock</button>
@@ -1055,11 +1055,15 @@
         </div>
 
         <div class="panel">
-          <h2>Admin Password</h2>
-          <div class="sub">Change the password used to sign in as an admin.</div>
+          <h2>Admin Login</h2>
+          <div class="sub">Change the username and password used to sign in as an admin.</div>
           <div class="change-pw-row">
+            <input type="text" id="new-admin-username-input" placeholder="New admin username">
+            <button class="btn btn-ghost btn-small" id="change-admin-username-btn">Update Username</button>
+          </div>
+          <div class="change-pw-row" style="margin-top:10px;">
             <input type="password" id="new-admin-password-input" placeholder="New admin password">
-            <button class="btn btn-ghost btn-small" id="change-admin-password-btn">Update Admin Password</button>
+            <button class="btn btn-ghost btn-small" id="change-admin-password-btn">Update Password</button>
           </div>
           <span class="toast" id="password-toast"></span>
         </div>
@@ -1072,11 +1076,13 @@
 </div>
 
 <script>
+const DEFAULT_ADMIN_USERNAME = 'admin';
 const DEFAULT_ADMIN_PASSWORD = 'admin123';
 
 let materials = [];
 let orders = [];
 let removedMaterialIds = [];
+let adminUsername = DEFAULT_ADMIN_USERNAME;
 let adminPassword = DEFAULT_ADMIN_PASSWORD;
 let isAuthenticated = false;
 let sellerRole = null; // 'admin' | 'employee'
@@ -1187,12 +1193,23 @@ async function insertOrder(order){
 
 async function loadAdminPassword(){
   try{
-    const rows = await sbFetch('app_settings?select=admin_password&id=eq.1');
-    adminPassword = rows && rows[0] && rows[0].admin_password ? rows[0].admin_password : DEFAULT_ADMIN_PASSWORD;
+    const rows = await sbFetch('app_settings?select=admin_username,admin_password&id=eq.1');
+    const row = rows && rows[0];
+    adminUsername = row && row.admin_username ? row.admin_username : DEFAULT_ADMIN_USERNAME;
+    adminPassword = row && row.admin_password ? row.admin_password : DEFAULT_ADMIN_PASSWORD;
   }catch(e){
     console.error(e);
+    adminUsername = DEFAULT_ADMIN_USERNAME;
     adminPassword = DEFAULT_ADMIN_PASSWORD;
   }
+}
+async function saveAdminUsername(newUsername){
+  await sbFetch('app_settings?on_conflict=id', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=minimal',
+    body: [{ id: 1, admin_username: newUsername }]
+  });
+  adminUsername = newUsername;
 }
 async function saveAdminPassword(newPw){
   await sbFetch('app_settings?on_conflict=id', {
@@ -2148,22 +2165,29 @@ async function attemptUnlock(){
   const nameInput = document.getElementById('gate-name-input');
   const passwordInput = document.getElementById('gate-password-input');
   const err = document.getElementById('gate-error');
-  const name = nameInput.value.trim();
-  if(!name){
-    err.textContent = 'Enter your name.';
+  const typedName = nameInput.value.trim();
+  const typedPassword = passwordInput.value;
+
+  if(!typedName || !typedPassword){
+    err.textContent = 'Enter your username and password.';
     return;
   }
+
   await loadAdminPassword();
   await loadEmployees();
 
   let role = null;
-  if(passwordInput.value === adminPassword){
+  let resolvedName = null;
+
+  if(typedName.toLowerCase() === adminUsername.toLowerCase() && typedPassword === adminPassword){
     role = 'admin';
+    resolvedName = adminUsername;
     permissions = { orders: true, statistics: true, materials: true, settings: true, access: true };
   }else{
-    const emp = employees.find(e => e.password === passwordInput.value);
+    const emp = employees.find(e => e.name.toLowerCase() === typedName.toLowerCase() && e.password === typedPassword);
     if(emp){
       role = 'employee';
+      resolvedName = emp.name;
       permissions = {
         orders: emp.allowOrders,
         statistics: emp.allowStatistics,
@@ -2177,8 +2201,8 @@ async function attemptUnlock(){
   if(role){
     isAuthenticated = true;
     sellerRole = role;
-    sellerName = name;
-    try{ localStorage.setItem('matorder:sellerName', name); }catch(e){}
+    sellerName = resolvedName;
+    try{ localStorage.setItem('matorder:sellerName', resolvedName); }catch(e){}
     err.textContent = '';
     passwordInput.value = '';
     renderGateState();
@@ -2193,7 +2217,7 @@ async function attemptUnlock(){
     document.getElementById('orders-open-toggle').checked = ordersOpen;
     document.getElementById('orders-open-label').textContent = ordersOpen ? 'Currently accepting new orders' : 'New orders are currently closed';
   }else{
-    err.textContent = 'Incorrect password.';
+    err.textContent = 'Incorrect username or password.';
   }
 }
 
@@ -2234,6 +2258,28 @@ function logout(){
   sellerName = '';
   permissions = { orders: true, statistics: true, materials: true, settings: true, access: false };
   renderGateState();
+}
+
+async function changeAdminUsername(){
+  const input = document.getElementById('new-admin-username-input');
+  const toast = document.getElementById('password-toast');
+  const val = input.value.trim();
+  if(val.length < 3){
+    toast.style.color = '#ff6b4a';
+    toast.textContent = 'Use at least 3 characters.';
+    return;
+  }
+  try{
+    await saveAdminUsername(val);
+    input.value = '';
+    toast.style.color = '#33d691';
+    toast.textContent = 'Admin username updated. Use it next time you sign in.';
+    setTimeout(() => toast.textContent = '', 3000);
+  }catch(e){
+    console.error('Username save failed:', e);
+    toast.style.color = '#ff6b4a';
+    toast.textContent = 'Could not update username — check the browser console for details.';
+  }
 }
 
 async function changeAdminPassword(){
@@ -2318,6 +2364,16 @@ async function addEmployeeClick(){
   if(!name || password.length < 4){
     toast.style.color = '#ff6b4a';
     toast.textContent = 'Enter a name and a password of at least 4 characters.';
+    return;
+  }
+  if(name.toLowerCase() === adminUsername.toLowerCase()){
+    toast.style.color = '#ff6b4a';
+    toast.textContent = 'That name is already used by the admin login.';
+    return;
+  }
+  if(employees.some(e => e.name.toLowerCase() === name.toLowerCase())){
+    toast.style.color = '#ff6b4a';
+    toast.textContent = 'An employee with that name already exists.';
     return;
   }
   try{
@@ -2442,6 +2498,7 @@ async function init(){
   document.getElementById('gate-name-input').addEventListener('keydown', e => {
     if(e.key === 'Enter') attemptUnlock();
   });
+  document.getElementById('change-admin-username-btn').addEventListener('click', changeAdminUsername);
   document.getElementById('change-admin-password-btn').addEventListener('click', changeAdminPassword);
   document.getElementById('add-employee-btn').addEventListener('click', addEmployeeClick);
   document.getElementById('logout-btn').addEventListener('click', logout);
