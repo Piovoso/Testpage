@@ -1,16 +1,16 @@
 /* DEMO — Local-only sample data for previewing the app without touching Supabase. */
 
 const DEMO_MATERIALS = [
-  { id: 'demo-rat', name: 'RAT', price: 3.20, weight: 0, volume: 0, productionPerDay: 0 },
-  { id: 'demo-dw', name: 'DW', price: 1.85, weight: 0, volume: 0, productionPerDay: 0 },
-  { id: 'demo-ove', name: 'OVE', price: 2.40, weight: 0, volume: 0, productionPerDay: 0 },
-  { id: 'demo-h2o', name: 'H2O', price: 0.45, weight: 0, volume: 0, productionPerDay: 0 },
-  { id: 'demo-fe', name: 'FE', price: 6.10, weight: 0, volume: 0, productionPerDay: 0 },
-  { id: 'demo-c', name: 'C', price: 2.75, weight: 0, volume: 0, productionPerDay: 0 },
-  { id: 'demo-al', name: 'AL', price: 8.90, weight: 0, volume: 0, productionPerDay: 0 },
-  { id: 'demo-si', name: 'SI', price: 5.30, weight: 0, volume: 0, productionPerDay: 0 },
-  { id: 'demo-lst', name: 'LST', price: 4.15, weight: 0, volume: 0, productionPerDay: 0 },
-  { id: 'demo-hal', name: 'HAL', price: 22.60, weight: 0, volume: 0, productionPerDay: 0 },
+  { id: 'demo-rat', name: 'RAT', price: 3.20, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null },
+  { id: 'demo-dw', name: 'DW', price: 1.85, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null },
+  { id: 'demo-ove', name: 'OVE', price: 2.40, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null },
+  { id: 'demo-h2o', name: 'H2O', price: 0.45, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null },
+  { id: 'demo-fe', name: 'FE', price: 6.10, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null },
+  { id: 'demo-c', name: 'C', price: 2.75, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null },
+  { id: 'demo-al', name: 'AL', price: 8.90, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null },
+  { id: 'demo-si', name: 'SI', price: 5.30, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null },
+  { id: 'demo-lst', name: 'LST', price: 4.15, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null },
+  { id: 'demo-hal', name: 'HAL', price: 22.60, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null },
 ];
 
 function buildDemoOrders(){

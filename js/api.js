@@ -65,7 +65,16 @@ async function loadMaterials(){
   if(demoMode) return;
   try{
     const rows = await sbFetch('materials?select=*&order=sort_order.asc');
-    materials = (rows || []).map(r => ({ id: r.id, name: r.name, price: Number(r.price), weight: Number(r.weight) || 0, volume: Number(r.volume) || 0, productionPerDay: Number(r.production_per_day) || 0 }));
+    materials = (rows || []).map(r => ({
+      id: r.id,
+      name: r.name,
+      price: Number(r.price),
+      weight: Number(r.weight) || 0,
+      volume: Number(r.volume) || 0,
+      discountPercent: Number(r.discount_percent) || 0,
+      showOnOrderList: r.show_on_order_list !== false,
+      cxPrice: (r.cx_price === null || r.cx_price === undefined) ? null : Number(r.cx_price)
+    }));
   }catch(e){
     // Deliberately NOT resetting `materials` to [] here — a failed request
     // (e.g. Supabase paused, network drop) should not look identical to
@@ -180,6 +189,45 @@ async function loadOrdersOpen(){
 }
 async function saveOrdersOpen(isOpen){
   await callManageShopSettings('saveOrdersOpen', { isOpen });
+}
+
+async function loadSiteTitle(){
+  try{
+    const rows = await sbFetch('app_settings?select=site_title&id=eq.1');
+    return rows && rows[0] && rows[0].site_title ? rows[0].site_title : 'Lotol Materials Co.';
+  }catch(e){
+    console.error(e);
+    return 'Lotol Materials Co.';
+  }
+}
+async function saveSiteTitle(title){
+  await callManageShopSettings('saveSiteTitle', { title });
+}
+
+async function loadAccentColor(){
+  try{
+    const rows = await sbFetch('app_settings?select=accent_color&id=eq.1');
+    return rows && rows[0] ? (rows[0].accent_color || null) : null;
+  }catch(e){
+    console.error(e);
+    return null;
+  }
+}
+async function saveAccentColor(color){
+  await callManageShopSettings('saveAccentColor', { color });
+}
+
+async function loadDefaultCxExchange(){
+  try{
+    const rows = await sbFetch('app_settings?select=default_cx_exchange&id=eq.1');
+    return rows && rows[0] && rows[0].default_cx_exchange ? rows[0].default_cx_exchange : 'NC1';
+  }catch(e){
+    console.error(e);
+    return 'NC1';
+  }
+}
+async function saveDefaultCxExchange(exchange){
+  await callManageShopSettings('saveDefaultCxExchange', { exchange });
 }
 
 /* ---------- Order view ---------- */

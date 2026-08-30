@@ -1,11 +1,13 @@
-/* SELLER: ORDERS — The Orders tab: filtering, search, sorting, pagination, status pipeline actions, comments, quantity editing, and production progress. */
+/* SELLER: ORDERS — The Orders tab: filtering, search, sorting, pagination, status pipeline actions, comments, quantity editing, and production progress. Master-detail layout: a compact list on the left, full ticket detail for whichever order is selected on the right. */
 
 let orderStatusFilter = 'pending';
 let orderSortDirection = 'desc';
 let orderSearchTerm = '';
 let editingOrderId = null;
-let expandedOrderIds = new Set(); // empty = every ticket starts collapsed
-let ordersDisplayLimit = 10;
+let selectedOrderId = null;
+let orderMenuOpen = false;
+let ordersPageSize = 10;
+let ordersCurrentPage = 1;
 let ordersTotalCount = 0;
 
 async function renderOrdersList(){
@@ -16,8 +18,6 @@ async function renderOrdersList(){
   let pageOrders;
 
   if(demoMode){
-    // Demo mode never touches the network — filter/sort/paginate the
-    // local sample orders directly instead of calling list-orders.
     let baseList;
     if(isSearching){
       const term = orderSearchTerm.trim().toLowerCase();
@@ -34,7 +34,8 @@ async function renderOrdersList(){
       return orderSortDirection === 'desc' ? diff : -diff;
     });
     ordersTotalCount = sorted.length;
-    pageOrders = sorted.slice(0, ordersDisplayLimit);
+    const offset = (ordersCurrentPage - 1) * ordersPageSize;
+    pageOrders = sorted.slice(offset, offset + ordersPageSize);
 
     ['pending', 'confirmed', 'production', 'delivered', 'denied'].forEach(s => {
       const tabBtn = document.querySelector(`#order-filter-tabs [data-status-filter="${s}"]`);
@@ -50,8 +51,8 @@ async function renderOrdersList(){
         status: orderStatusFilter,
         search: orderSearchTerm.trim(),
         sort: orderSortDirection,
-        limit: ordersDisplayLimit,
-        offset: 0
+        limit: ordersPageSize,
+        offset: (ordersCurrentPage - 1) * ordersPageSize
       });
     }catch(e){
       console.error('Could not load orders:', e);
@@ -59,7 +60,7 @@ async function renderOrdersList(){
       return;
     }
     pageOrders = (result.orders || []).map(dbToOrder);
-    orders = pageOrders; // event handlers below look these up via orders.find(...)
+    orders = pageOrders;
     ordersTotalCount = result.totalCount || 0;
 
     ['pending', 'confirmed', 'production', 'delivered', 'denied'].forEach(s => {
@@ -71,250 +72,273 @@ async function renderOrdersList(){
   }
 
   filterTabsEl.style.opacity = isSearching ? '0.45' : '1';
+  subText.textContent = isSearching
+    ? `Searching every order status for "${orderSearchTerm.trim()}".`
+    : `Showing ${ordersPageSize} orders per page in the selected status.`;
 
-  if(isSearching){
-    subText.textContent = `Searching every order status for "${orderSearchTerm.trim()}".`;
-  }else{
-    subText.textContent = 'Showing the most recent 10 orders in the selected status.';
+  const totalPages = Math.max(1, Math.ceil(ordersTotalCount / ordersPageSize));
+
+  // If a filter/search change left us on a page beyond what's actually
+  // available, snap back to the last real page and refetch once, rather
+  // than showing a confusing empty page when earlier pages have results.
+  if(pageOrders.length === 0 && ordersTotalCount > 0 && ordersCurrentPage > totalPages){
+    ordersCurrentPage = totalPages;
+    return renderOrdersList();
   }
 
   if(pageOrders.length === 0){
     list.innerHTML = isSearching
       ? `<div class="empty-state">No orders match "${escapeHtml(orderSearchTerm.trim())}".</div>`
       : `<div class="empty-state">No ${STATUS_LABELS[orderStatusFilter]} orders.</div>`;
+    selectedOrderId = null;
   }else{
-    list.innerHTML = '';
-    pageOrders.forEach(order => {
-      const ticket = document.createElement('div');
-      ticket.className = 'ticket';
-      const dt = new Date(order.createdAt);
-      const dateStr = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-      const cur = order.currency || 'NCC';
-
-      let stampHtml = '';
-      if(order.status === 'confirmed') stampHtml = '<div class="stamp">CONFIRMED</div>';
-      if(order.status === 'production') stampHtml = '<div class="stamp stamp-production">IN PRODUCTION</div>';
-      if(order.status === 'delivered') stampHtml = '<div class="stamp stamp-delivered">DELIVERED</div>';
-      if(order.status === 'denied') stampHtml = '<div class="stamp stamp-denied">DENIED</div>';
-
-      const statusClass = 'status-' + order.status;
-
-      let footButtons = '';
-      if(order.status === 'pending'){
-        footButtons = `
-          <div style="display:flex; gap:8px;">
-            <button class="btn btn-primary btn-small" data-advance="${order.id}">Confirm Order</button>
-            <button class="btn btn-deny btn-small" data-deny="${order.id}">Deny / Cancel</button>
-          </div>`;
-      }else if(order.status === 'delivered'){
-        footButtons = `
-          <div style="display:flex; gap:8px;">
-            <button class="btn btn-ghost btn-small" data-revert="${order.id}">Revert to Production</button>
-            <button class="btn btn-delete btn-small" data-delete="${order.id}">Delete</button>
-          </div>`;
-      }else if(order.status === 'denied'){
-        footButtons = `
-          <div style="display:flex; gap:8px;">
-            <button class="btn btn-ghost btn-small" data-restore="${order.id}">Restore to Pending</button>
-            <button class="btn btn-delete btn-small" data-delete="${order.id}">Delete</button>
-          </div>`;
-      }else{
-        footButtons = `
-          <div style="display:flex; gap:8px;">
-            <button class="btn btn-primary btn-small" data-advance="${order.id}">${NEXT_LABEL[order.status]}</button>
-            <button class="btn btn-ghost btn-small" data-revert="${order.id}">Back</button>
-          </div>`;
-      }
-
-      const isEditing = order.id === editingOrderId;
-      const itemsHtml = isEditing
-        ? order.items.map(it => {
-            const produced = Math.max(0, Math.min(it.qty, Number(it.producedQty) || 0));
-            const pct = it.qty > 0 ? Math.round((produced / it.qty) * 100) : 0;
-            return `
-            <tr>
-              <td>${escapeHtml(it.name)}</td>
-              <td class="num"><input type="number" min="0" step="1" value="${it.qty}" data-seller-qty="${order.id}:${it.materialId}" class="qty-input"></td>
-              <td class="num">${money(it.price, cur)}</td>
-              <td class="num" id="seller-sub-${order.id}-${it.materialId}">${money(it.subtotal, cur)}</td>
-              <td class="num">${produced}</td>
-              <td class="num">${pct}%</td>
-            </tr>
-          `;
-          }).join('')
-        : ticketRowsHtml(order, sellerRole === 'admin' || sellerRole === 'employee');
-
-      const isCollapsed = !expandedOrderIds.has(order.id);
-
-      ticket.innerHTML = `
-        ${stampHtml}
-        <div class="ticket-head">
-          <div>
-            <div class="ticket-id">TICKET #${order.id.slice(-6).toUpperCase()}</div>
-            <div class="ticket-customer">${escapeHtml(order.customerName)}</div>
-            ${order.username ? `<div class="ticket-note">User: ${escapeHtml(order.username)}</div>` : ''}
-            ${order.contact ? `<div class="ticket-note">Discord: ${escapeHtml(order.contact)}</div>` : ''}
-            ${order.pickupLocation ? `<div class="ticket-note">Pickup: ${escapeHtml(order.pickupLocation)}</div>` : ''}
-            ${order.note ? `<div class="ticket-note">"${escapeHtml(order.note)}"</div>` : ''}
-            ${(order.sourcePlans && order.sourcePlans.length) ? `<div class="ticket-note">From ${order.sourcePlans.length} base${order.sourcePlans.length !== 1 ? 's' : ''}: ${order.sourcePlans.map(p => `<a href="${escapeAttr(p.url)}" target="_blank" rel="noopener" style="color:var(--accent);">${escapeHtml(p.planetId)}</a>`).join(', ')}</div>` : ''}
-          </div>
-          <div style="text-align:right;">
-            <div class="ticket-date">${dateStr}</div>
-            <div style="margin-top:8px; display:flex; align-items:center; gap:8px; justify-content:flex-end;">
-              <span class="status-badge ${statusClass}">${STATUS_LABELS[order.status]}</span>
-              <button class="icon-btn" title="${isCollapsed ? 'Expand' : 'Collapse'}" data-toggle-collapse="${order.id}">${isCollapsed ? '▸' : '▾'}</button>
-            </div>
-            ${order.handledBy ? `<div class="ticket-date" style="margin-top:6px;">Handled by: ${escapeHtml(order.handledBy)}</div>` : ''}
-          </div>
-        </div>
-        ${progressBadgeHtml(order)}
-        <div class="ticket-collapsible" id="ticket-collapsible-${order.id}" style="${isCollapsed ? 'display:none;' : ''}">
-          ${physicalsBarHtml(order)}
-          <div class="ticket-body">
-            ${isEditing ? `
-              <div class="edit-currency-pickup-row">
-                <div>
-                  <label>Currency</label>
-                  <select data-edit-currency="${order.id}">
-                    ${currencyOptions.map(c => `<option value="${escapeAttr(c)}" ${c === order.currency ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
-                  </select>
-                </div>
-                <div>
-                  <label>Pickup Location</label>
-                  <select data-edit-pickup="${order.id}">
-                    ${pickupLocations.map(p => `<option value="${escapeAttr(p)}" ${p === order.pickupLocation ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}
-                  </select>
-                </div>
-              </div>
-            ` : ''}
-            <table>
-              <thead><tr><th>Material</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Subtotal</th><th class="num">Produced</th><th class="num">% Ready</th></tr></thead>
-              <tbody>${itemsHtml}</tbody>
-            </table>
-            ${!isEditing ? `
-              <div class="comment-box">
-                <label>Production progress</label>
-                <div class="comment-actions">
-                  <button class="btn btn-ghost btn-small" data-save-progress="${order.id}">Save Progress</button>
-                  <span class="toast" id="progress-toast-${order.id}"></span>
-                </div>
-              </div>
-            ` : ''}
-            <div class="comment-box">
-              <label>Comment for buyer (visible on their status check)</label>
-              <textarea data-comment-input="${order.id}" placeholder="e.g. Backordered on rebar, ETA Friday.">${escapeHtml(order.sellerComment || '')}</textarea>
-              <div class="comment-actions">
-                <button class="btn btn-ghost btn-small" data-save-comment="${order.id}">Save Comment</button>
-                <span class="toast" id="comment-toast-${order.id}"></span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="ticket-foot">
-          <div class="ticket-total" id="seller-edit-total-${order.id}">${money(order.total, cur)}</div>
-          ${isEditing ? `
-            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-              <div style="display:flex; gap:8px;">
-                <button class="btn btn-primary btn-small" data-save-edit="${order.id}">Save Changes</button>
-                <button class="btn btn-ghost btn-small" data-cancel-edit="${order.id}">Cancel Edit</button>
-              </div>
-              <span class="toast" id="seller-edit-toast-${order.id}"></span>
-            </div>
-          ` : `
-            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              ${footButtons}
-              <button class="btn btn-ghost btn-small" data-edit-order="${order.id}">Edit Quantities</button>
-            </div>
-          `}
-        </div>
-      `;
-      list.appendChild(ticket);
-    });
-
-    list.querySelectorAll('[data-advance]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const order = orders.find(o => o.id === btn.dataset.advance);
-        if(order) setOrderStatus(order.id, NEXT_STATUS[order.status]);
-      });
-    });
-    list.querySelectorAll('[data-deny]').forEach(btn => {
-      btn.addEventListener('click', () => setOrderStatus(btn.dataset.deny, 'denied'));
-    });
-    list.querySelectorAll('[data-revert]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const order = orders.find(o => o.id === btn.dataset.revert);
-        if(order) setOrderStatus(order.id, PREV_STATUS[order.status]);
-      });
-    });
-    list.querySelectorAll('[data-restore]').forEach(btn => {
-      btn.addEventListener('click', () => setOrderStatus(btn.dataset.restore, 'pending'));
-    });
-    list.querySelectorAll('[data-delete]').forEach(btn => {
-      btn.addEventListener('click', () => armDeleteButton(btn));
-    });
-    list.querySelectorAll('[data-save-comment]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.saveComment;
-        const textarea = list.querySelector(`[data-comment-input="${id}"]`);
-        saveOrderComment(id, textarea.value);
-      });
-    });
-    list.querySelectorAll('[data-produced-input]').forEach(inp => {
-      inp.addEventListener('input', () => {
-        const orderId = inp.dataset.producedInput.split(':')[0];
-        const order = orders.find(o => o.id === orderId);
-        if(order) recalcProducedProgress(order, inp);
-      });
-    });
-    list.querySelectorAll('[data-save-progress]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const order = orders.find(o => o.id === btn.dataset.saveProgress);
-        if(order) saveOrderProgress(order);
-      });
-    });
-    list.querySelectorAll('[data-edit-order]').forEach(btn => {
-      btn.addEventListener('click', () => toggleOrderEdit(btn.dataset.editOrder));
-    });
-    list.querySelectorAll('[data-cancel-edit]').forEach(btn => {
-      btn.addEventListener('click', () => toggleOrderEdit(null));
-    });
-    list.querySelectorAll('[data-toggle-collapse]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.toggleCollapse;
-        const wrap = document.getElementById(`ticket-collapsible-${id}`);
-        const willCollapse = wrap.style.display !== 'none';
-        wrap.style.display = willCollapse ? 'none' : '';
-        btn.textContent = willCollapse ? '▸' : '▾';
-        btn.title = willCollapse ? 'Expand' : 'Collapse';
-        if(willCollapse) expandedOrderIds.delete(id); else expandedOrderIds.add(id);
-      });
-    });
-    list.querySelectorAll('[data-seller-qty]').forEach(inp => {
-      inp.addEventListener('input', () => {
-        const orderId = inp.dataset.sellerQty.split(':')[0];
-        const order = orders.find(o => o.id === orderId);
-        if(order) recalcSellerEditTotal(order);
-      });
-    });
-    list.querySelectorAll('[data-save-edit]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const order = orders.find(o => o.id === btn.dataset.saveEdit);
-        if(order) saveSellerOrderEdit(order);
+    if(!pageOrders.some(o => o.id === selectedOrderId)){
+      selectedOrderId = pageOrders[0].id;
+    }
+    list.innerHTML = pageOrders.map(order => buildOrderRowHtml(order)).join('');
+    list.querySelectorAll('[data-select-order]').forEach(row => {
+      row.addEventListener('click', () => {
+        if(row.dataset.selectOrder === selectedOrderId) return;
+        selectedOrderId = row.dataset.selectOrder;
+        editingOrderId = null;
+        orderMenuOpen = false;
+        list.querySelectorAll('.order-row').forEach(r => r.classList.toggle('selected', r.dataset.selectOrder === selectedOrderId));
+        renderOrderDetail();
       });
     });
   }
 
-  const loadMoreWrap = document.getElementById('orders-load-more-wrap');
-  if(ordersTotalCount > pageOrders.length){
-    loadMoreWrap.style.display = 'block';
-    document.getElementById('orders-load-more-count').textContent = Math.min(10, ordersTotalCount - pageOrders.length);
-  }else{
-    loadMoreWrap.style.display = 'none';
-  }
+  document.getElementById('orders-page-label').textContent = `Page ${ordersCurrentPage} of ${totalPages}`;
+  document.getElementById('orders-prev-page-btn').disabled = ordersCurrentPage <= 1;
+  document.getElementById('orders-next-page-btn').disabled = ordersCurrentPage >= totalPages;
+
+  renderOrderDetail();
 }
 
-function loadMoreOrders(){
-  ordersDisplayLimit += 10;
+function buildOrderRowHtml(order){
+  const dt = new Date(order.createdAt);
+  const dateStr = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const { percent } = calcOrderReadiness(order);
+  const isSelected = order.id === selectedOrderId;
+  return `
+    <div class="order-row ${isSelected ? 'selected' : ''}" data-select-order="${order.id}">
+      <div class="row-id">#${order.id.slice(-6).toUpperCase()}</div>
+      <div class="row-company">${escapeHtml(order.username || '')} — ${escapeHtml(order.customerName)}</div>
+      <div class="row-meta"><span>${escapeHtml(order.pickupLocation || '')}</span><span>${dateStr}</span></div>
+      <div class="row-bottom">
+        <span class="status-badge status-${order.status}">${STATUS_LABELS[order.status]}</span>
+        <span class="row-progress">${Math.round(percent)}% ready</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderOrderDetail(){
+  const panel = document.getElementById('order-detail-panel');
+  const order = orders.find(o => o.id === selectedOrderId);
+  if(!order){
+    panel.innerHTML = `<div class="empty-state">Select an order from the list.</div>`;
+    return;
+  }
+
+  const dt = new Date(order.createdAt);
+  const dateStr = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const cur = order.currency || 'NCC';
+
+  let stampHtml = '';
+  if(order.status === 'confirmed') stampHtml = '<div class="stamp">CONFIRMED</div>';
+  if(order.status === 'production') stampHtml = '<div class="stamp stamp-production">IN PRODUCTION</div>';
+  if(order.status === 'delivered') stampHtml = '<div class="stamp stamp-delivered">DELIVERED</div>';
+  if(order.status === 'denied') stampHtml = '<div class="stamp stamp-denied">DENIED</div>';
+
+  const statusClass = 'status-' + order.status;
+
+  let statusBtns = '';
+  if(order.status === 'pending'){
+    statusBtns = `<button class="btn btn-primary btn-small" data-advance="${order.id}">Confirm Order</button><button class="btn btn-deny btn-small" data-deny="${order.id}">Deny / Cancel</button>`;
+  }else if(order.status === 'delivered'){
+    statusBtns = `<button class="btn btn-ghost btn-small" data-revert="${order.id}">Revert to Production</button>`;
+  }else if(order.status === 'denied'){
+    statusBtns = `<button class="btn btn-ghost btn-small" data-restore="${order.id}">Restore to Pending</button>`;
+  }else{
+    statusBtns = `<button class="btn btn-primary btn-small" data-advance="${order.id}">${NEXT_LABEL[order.status]}</button><button class="btn btn-ghost btn-small" data-revert="${order.id}">Back</button>`;
+  }
+
+  const isEditing = order.id === editingOrderId;
+  const itemsHtml = isEditing
+    ? order.items.map(it => {
+        const produced = Math.max(0, Math.min(it.qty, Number(it.producedQty) || 0));
+        const pct = it.qty > 0 ? Math.round((produced / it.qty) * 100) : 0;
+        return `
+        <tr>
+          <td>${escapeHtml(it.name)}</td>
+          <td class="num"><input type="number" min="0" step="1" value="${it.qty}" data-seller-qty="${order.id}:${it.materialId}" class="qty-input"></td>
+          <td class="num">${money(it.price, cur)}</td>
+          <td class="num" id="seller-sub-${order.id}-${it.materialId}">${money(it.subtotal, cur)}</td>
+          <td class="num">${produced}</td>
+          <td class="num">${pct}%</td>
+        </tr>
+      `;
+      }).join('')
+    : ticketRowsHtml(order, sellerRole === 'admin' || sellerRole === 'employee');
+
+  let footRight;
+  if(isEditing){
+    footRight = `
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary btn-small" data-save-edit="${order.id}">Save Changes</button>
+          <button class="btn btn-ghost btn-small" data-cancel-edit="${order.id}">Cancel Edit</button>
+        </div>
+        <span class="toast" id="seller-edit-toast-${order.id}"></span>
+      </div>
+    `;
+  }else{
+    footRight = `
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        ${statusBtns}
+        <div class="dots-menu-wrap">
+          <button class="btn btn-ghost btn-small dots-btn" data-toggle-menu="${order.id}">⋮</button>
+          ${orderMenuOpen === order.id ? `
+            <div class="dots-menu">
+              <div class="dots-menu-item" data-edit-order="${order.id}">Edit Quantities</div>
+              ${(order.status === 'delivered' || order.status === 'denied') ? `<div class="dots-menu-item danger" data-delete="${order.id}">Delete</div>` : ''}
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  panel.innerHTML = `
+    <div class="ticket">
+      ${stampHtml}
+      <div class="ticket-head">
+        <div>
+          <div class="ticket-id">TICKET #${order.id.slice(-6).toUpperCase()}</div>
+          <div class="ticket-customer">${escapeHtml(order.customerName)}</div>
+          ${order.username ? `<div class="ticket-note">User: ${escapeHtml(order.username)}</div>` : ''}
+          ${order.contact ? `<div class="ticket-note">Discord: ${escapeHtml(order.contact)}</div>` : ''}
+          ${order.pickupLocation ? `<div class="ticket-note">Pickup: ${escapeHtml(order.pickupLocation)}</div>` : ''}
+          ${order.note ? `<div class="ticket-note">"${escapeHtml(order.note)}"</div>` : ''}
+          ${(order.sourcePlans && order.sourcePlans.length) ? `<div class="ticket-note">From ${order.sourcePlans.length} base${order.sourcePlans.length !== 1 ? 's' : ''}: ${order.sourcePlans.map(p => `<a href="${escapeAttr(p.url)}" target="_blank" rel="noopener" style="color:var(--accent);">${escapeHtml(p.planetId)}</a>`).join(', ')}</div>` : ''}
+        </div>
+        <div style="text-align:right;">
+          <div class="ticket-date">${dateStr}</div>
+          <div style="margin-top:8px;"><span class="status-badge ${statusClass}">${STATUS_LABELS[order.status]}</span></div>
+          ${order.handledBy ? `<div class="ticket-date" style="margin-top:6px;">Handled by: ${escapeHtml(order.handledBy)}</div>` : ''}
+        </div>
+      </div>
+      ${progressBadgeHtml(order)}
+      ${physicalsBarHtml(order)}
+      <div class="ticket-body">
+        ${isEditing ? `
+          <div class="edit-currency-pickup-row">
+            <div>
+              <label>Currency</label>
+              <select data-edit-currency="${order.id}">
+                ${currencyOptions.map(c => `<option value="${escapeAttr(c)}" ${c === order.currency ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label>Pickup Location</label>
+              <select data-edit-pickup="${order.id}">
+                ${pickupLocations.map(p => `<option value="${escapeAttr(p)}" ${p === order.pickupLocation ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+        ` : ''}
+        <table>
+          <thead><tr><th>Material</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Subtotal</th><th class="num">Produced</th><th class="num">% Ready</th></tr></thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+        ${!isEditing ? `
+          <div class="comment-box">
+            <label>Production progress</label>
+            <div class="comment-actions">
+              <button class="btn btn-ghost btn-small" data-save-progress="${order.id}">Save Progress</button>
+              <span class="toast" id="progress-toast-${order.id}"></span>
+            </div>
+          </div>
+        ` : ''}
+        <div class="comment-box">
+          <label>Comment for buyer (visible on their status check)</label>
+          <textarea data-comment-input="${order.id}" placeholder="e.g. Backordered on rebar, ETA Friday.">${escapeHtml(order.sellerComment || '')}</textarea>
+          <div class="comment-actions">
+            <button class="btn btn-ghost btn-small" data-save-comment="${order.id}">Save Comment</button>
+            <span class="toast" id="comment-toast-${order.id}"></span>
+          </div>
+        </div>
+      </div>
+      <div class="ticket-foot">
+        <div class="ticket-total" id="seller-edit-total-${order.id}">${money(order.total, cur)}</div>
+        ${footRight}
+      </div>
+    </div>
+  `;
+
+  panel.querySelectorAll('[data-advance]').forEach(btn => {
+    btn.addEventListener('click', () => setOrderStatus(btn.dataset.advance, NEXT_STATUS[order.status]));
+  });
+  panel.querySelectorAll('[data-deny]').forEach(btn => {
+    btn.addEventListener('click', () => setOrderStatus(btn.dataset.deny, 'denied'));
+  });
+  panel.querySelectorAll('[data-revert]').forEach(btn => {
+    btn.addEventListener('click', () => setOrderStatus(btn.dataset.revert, PREV_STATUS[order.status]));
+  });
+  panel.querySelectorAll('[data-restore]').forEach(btn => {
+    btn.addEventListener('click', () => setOrderStatus(btn.dataset.restore, 'pending'));
+  });
+  panel.querySelectorAll('[data-delete]').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); armDeleteButton(btn, () => deleteOrder(btn.dataset.delete)); });
+  });
+  panel.querySelectorAll('[data-save-comment]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.saveComment;
+      const textarea = panel.querySelector(`[data-comment-input="${id}"]`);
+      saveOrderComment(id, textarea.value);
+    });
+  });
+  panel.querySelectorAll('[data-produced-input]').forEach(inp => {
+    inp.addEventListener('input', () => recalcProducedProgress(order, inp));
+  });
+  panel.querySelectorAll('[data-save-progress]').forEach(btn => {
+    btn.addEventListener('click', () => saveOrderProgress(order));
+  });
+  panel.querySelectorAll('[data-toggle-menu]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      orderMenuOpen = orderMenuOpen === order.id ? false : order.id;
+      renderOrderDetail();
+    });
+  });
+  panel.querySelectorAll('[data-edit-order]').forEach(el => {
+    el.addEventListener('click', () => { orderMenuOpen = false; toggleOrderEdit(el.dataset.editOrder); });
+  });
+  panel.querySelectorAll('[data-cancel-edit]').forEach(btn => {
+    btn.addEventListener('click', () => toggleOrderEdit(null));
+  });
+  panel.querySelectorAll('[data-seller-qty]').forEach(inp => {
+    inp.addEventListener('input', () => recalcSellerEditTotal(order));
+  });
+  panel.querySelectorAll('[data-save-edit]').forEach(btn => {
+    btn.addEventListener('click', () => saveSellerOrderEdit(order));
+  });
+  enhanceNumberInputsIn(panel, 'input.qty-input', 'stacked');
+}
+
+document.addEventListener('click', () => {
+  if(orderMenuOpen){ orderMenuOpen = false; renderOrderDetail(); }
+});
+
+function goToOrdersPage(delta){
+  ordersCurrentPage = Math.max(1, ordersCurrentPage + delta);
+  renderOrdersList();
+}
+
+function setOrdersPageSize(size){
+  ordersPageSize = size;
+  ordersCurrentPage = 1;
   renderOrdersList();
 }
 
@@ -323,25 +347,27 @@ function setOrderFilter(status){
   orderSearchTerm = '';
   const searchInput = document.getElementById('order-search-input');
   if(searchInput) searchInput.value = '';
-  ordersDisplayLimit = 10;
+  ordersCurrentPage = 1;
+  selectedOrderId = null;
   renderOrdersList();
 }
 
 function setOrderSort(direction){
   orderSortDirection = direction;
-  ordersDisplayLimit = 10;
+  ordersCurrentPage = 1;
   renderOrdersList();
 }
 
 function setOrderSearch(term){
   orderSearchTerm = term;
-  ordersDisplayLimit = 10;
+  ordersCurrentPage = 1;
+  selectedOrderId = null;
   renderOrdersList();
 }
 
 function toggleOrderEdit(id){
   editingOrderId = (editingOrderId === id) ? null : id;
-  renderOrdersList();
+  renderOrderDetail();
 }
 
 function recalcSellerEditTotal(order){
@@ -369,7 +395,7 @@ async function saveSellerOrderEdit(order){
   });
   if(newItems.length === 0){
     if(toast){
-      toast.style.color = '#f2765a';
+      toast.style.color = 'var(--rust)';
       toast.textContent = 'Order must have at least one item — deny/cancel it instead.';
     }
     return;
@@ -381,8 +407,6 @@ async function saveSellerOrderEdit(order){
   try{
     const result = await callManageOrder('editQuantities', { id: order.id, items: newItems, currency: newCurrency, pickupLocation: newPickup });
     if(demoMode){
-      // No server response to trust here — recompute locally from what's
-      // already known, same math the server would have done.
       const updated = newItems.map(ni => {
         const existing = order.items.find(it => it.materialId === ni.materialId);
         const producedQty = Math.min(ni.qty, Number(existing?.producedQty) || 0);
@@ -404,7 +428,7 @@ async function saveSellerOrderEdit(order){
   }catch(e){
     console.error('Seller order edit failed:', e);
     if(toast){
-      toast.style.color = '#f2765a';
+      toast.style.color = 'var(--rust)';
       toast.textContent = e.message || 'Could not save changes.';
     }
   }
@@ -423,7 +447,7 @@ async function setOrderStatus(id, status){
     console.error(e);
     const toast = document.getElementById('order-toast');
     if(toast){
-      toast.style.color = '#f2765a';
+      toast.style.color = 'var(--rust)';
       toast.textContent = e.message || 'Could not update this order.';
     }
   }
@@ -437,14 +461,14 @@ async function saveOrderComment(id, text){
     await callManageOrder('saveComment', { id, comment: text.trim() });
     order.sellerComment = text.trim();
     if(toast){
-      toast.style.color = '#3fcf8e';
+      toast.style.color = 'var(--ok)';
       toast.textContent = 'Saved.';
       setTimeout(() => { if(toast) toast.textContent = ''; }, 2000);
     }
   }catch(e){
     console.error(e);
     if(toast){
-      toast.style.color = '#f2765a';
+      toast.style.color = 'var(--rust)';
       toast.textContent = e.message || 'Could not save.';
     }
   }
@@ -458,7 +482,6 @@ function recalcProducedProgress(order, changedInput){
   if(val > item.qty){ val = item.qty; changedInput.value = val; }
   item.producedQty = val;
 
-  // Update this row's own % Ready cell (the cell right after the input's parent td)
   const row = changedInput.closest('tr');
   if(row){
     const pctCell = row.children[row.children.length - 1];
@@ -466,7 +489,6 @@ function recalcProducedProgress(order, changedInput){
     if(pctCell) pctCell.textContent = pct + '%';
   }
 
-  // Update the overall progress badge for this ticket
   const ticket = changedInput.closest('.ticket');
   if(ticket){
     const { percent } = calcOrderReadiness(order);
@@ -497,14 +519,21 @@ async function saveOrderProgress(order){
       order.items = result.items;
     }
     if(toast){
-      toast.style.color = '#3fcf8e';
+      toast.style.color = 'var(--ok)';
       toast.textContent = 'Saved.';
       setTimeout(() => { if(toast) toast.textContent = ''; }, 2000);
+    }
+    // Keep the list row's mini progress % in sync without a full refetch.
+    const row = document.querySelector(`[data-select-order="${order.id}"]`);
+    if(row){
+      const { percent } = calcOrderReadiness(order);
+      const progEl = row.querySelector('.row-progress');
+      if(progEl) progEl.textContent = Math.round(percent) + '% ready';
     }
   }catch(e){
     console.error('Save progress failed:', e);
     if(toast){
-      toast.style.color = '#f2765a';
+      toast.style.color = 'var(--rust)';
       toast.textContent = e.message || 'Could not save.';
     }
   }
@@ -532,11 +561,10 @@ async function deleteOrder(id){
   try{
     await callManageOrder('deleteOrder', { id });
     if(demoMode) orders = orders.filter(o => o.id !== id);
+    if(selectedOrderId === id) selectedOrderId = null;
     renderOrdersList();
     updatePendingBadge();
   }catch(e){
     console.error(e);
   }
 }
-
-/* ---------- Seller: statistics ---------- */

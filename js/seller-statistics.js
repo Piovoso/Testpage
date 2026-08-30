@@ -19,7 +19,6 @@ async function renderStatistics(){
       currencyTotals[cur][o.status] += o.total;
     });
   }else{
-    showSpinner(statusGrid, 'Loading statistics…');
     try{
       const result = await callListOrders('sellerStats', {});
       statusCounts = result.statusCounts;

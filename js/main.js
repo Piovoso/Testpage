@@ -7,6 +7,7 @@ function showTab(name){
   document.getElementById('view-order').classList.toggle('active', name === 'order');
   document.getElementById('view-status').classList.toggle('active', name === 'status');
   document.getElementById('view-seller').classList.toggle('active', name === 'seller');
+  document.body.classList.toggle('seller-tab-active', name === 'seller');
   if(name === 'seller'){
     renderGateState();
     if(isAuthenticated){
@@ -30,6 +31,9 @@ function showSellerSubtab(name){
 }
 
 async function init(){
+  initTheme();
+  applySiteTitle(await loadSiteTitle());
+  applyAccentColor(await loadAccentColor());
   await loadMaterials();
   await loadDropdownOptions();
   renderOrderTable();
@@ -37,6 +41,8 @@ async function init(){
   renderPickupOptionsEditor();
   renderCurrencyOptionsEditor();
   populateBuyerSelects();
+  defaultCxExchange = await loadDefaultCxExchange();
+  renderCxExchangeSelector();
   loadDraftOrder();
   await checkAdminExists();
   applyGateCopy();
@@ -53,6 +59,7 @@ async function init(){
   await trySilentSessionRestore();
 
   document.getElementById('tab-order').addEventListener('click', () => showTab('order'));
+  document.getElementById('theme-toggle-btn').addEventListener('click', toggleTheme);
   document.getElementById('tab-status').addEventListener('click', () => showTab('status'));
   document.getElementById('tab-seller').addEventListener('click', () => showTab('seller'));
   document.getElementById('submit-order-btn').addEventListener('click', submitOrder);
@@ -80,8 +87,10 @@ async function init(){
   document.getElementById('save-pickup-options-btn').addEventListener('click', () => saveOptionListClick('pickup'));
   document.getElementById('add-currency-option-btn').addEventListener('click', addCurrencyOption);
   document.getElementById('save-currency-options-btn').addEventListener('click', () => saveOptionListClick('currency'));
-  document.getElementById('save-materials-btn').addEventListener('click', saveMaterialsClick);
   document.getElementById('update-fio-weights-btn').addEventListener('click', updateWeightsFromFio);
+  document.getElementById('update-cx-prices-btn').addEventListener('click', updateCxPricesClick);
+  document.getElementById('materials-edit-toggle-btn').addEventListener('click', toggleMaterialsEditMode);
+  document.getElementById('save-cx-exchange-btn').addEventListener('click', saveDefaultCxExchangeClick);
   document.getElementById('gate-submit-btn').addEventListener('click', attemptUnlock);
   document.getElementById('gate-password-input').addEventListener('keydown', e => {
     if(e.key === 'Enter') attemptUnlock();
@@ -99,6 +108,9 @@ async function init(){
   });
   document.getElementById('save-notice-btn').addEventListener('click', saveNoticeClick);
   document.getElementById('save-site-note-btn').addEventListener('click', saveSiteNoteClick);
+  document.getElementById('save-site-title-btn').addEventListener('click', saveSiteTitleClick);
+  document.getElementById('save-accent-color-btn').addEventListener('click', saveAccentColorClick);
+  document.getElementById('reset-accent-color-btn').addEventListener('click', resetAccentColorClick);
   document.getElementById('orders-open-toggle').addEventListener('change', onOrdersOpenToggle);
   document.getElementById('load-demo-btn').addEventListener('click', loadDemoData);
   document.getElementById('exit-demo-btn').addEventListener('click', exitDemoMode);
@@ -116,7 +128,9 @@ async function init(){
     if(btn) setOrderFilter(btn.dataset.statusFilter);
   });
   document.getElementById('order-sort-select').addEventListener('change', (e) => setOrderSort(e.target.value));
-  document.getElementById('orders-load-more-btn').addEventListener('click', loadMoreOrders);
+  document.getElementById('orders-prev-page-btn').addEventListener('click', () => goToOrdersPage(-1));
+  document.getElementById('orders-next-page-btn').addEventListener('click', () => goToOrdersPage(1));
+  document.getElementById('orders-page-size').addEventListener('change', (e) => setOrdersPageSize(Number(e.target.value)));
   document.getElementById('order-search-input').addEventListener('input', (e) => setOrderSearch(e.target.value));
   document.getElementById('seller-subtab-orders').addEventListener('click', () => showSellerSubtab('orders'));
   document.getElementById('seller-subtab-statistics').addEventListener('click', () => showSellerSubtab('statistics'));

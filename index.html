@@ -4,6 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lotol Materials Co.</title>
+<script>
+  // Applied before the stylesheet paints anything, so there's no flash of
+  // the wrong theme on load. Kept tiny and inline on purpose — everything
+  // else the theme toggle needs lives in js/utils.js.
+  (function(){
+    try{
+      var saved = localStorage.getItem('matorder:theme');
+      if(saved === 'light') document.documentElement.classList.add('light-mode');
+    }catch(e){}
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -32,12 +43,13 @@
   <header class="top">
     <div class="brand">
       <div class="eyebrow">Order Ticket System</div>
-      <h1>Lotol Materials Co.</h1>
+      <h1 id="site-title-heading">Lotol Materials Co.</h1>
     </div>
     <nav class="tabs">
       <button id="tab-order" class="active">Place Order</button>
       <button id="tab-status">Check Order Status</button>
       <button id="tab-seller">Seller Dashboard</button>
+      <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle light/dark mode">🌙</button>
     </nav>
   </header>
 
@@ -250,9 +262,26 @@
             </div>
           </div>
 
-          <div id="orders-list"></div>
-          <div id="orders-load-more-wrap" style="display:none; text-align:center; margin-top:16px;">
-            <button class="btn btn-ghost btn-small" id="orders-load-more-btn">Load <span id="orders-load-more-count">10</span> More</button>
+          <div class="orders-split">
+            <div class="orders-list-col">
+              <div id="orders-list"></div>
+              <div class="orders-pagination" id="orders-pagination">
+                <div class="page-size-control">
+                  <label for="orders-page-size">Per page</label>
+                  <select id="orders-page-size">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="15">15</option>
+                  </select>
+                </div>
+                <div class="page-nav">
+                  <button class="btn btn-ghost btn-small" id="orders-prev-page-btn">‹ Prev</button>
+                  <span id="orders-page-label">Page 1 of 1</span>
+                  <button class="btn btn-ghost btn-small" id="orders-next-page-btn">Next ›</button>
+                </div>
+              </div>
+            </div>
+            <div class="orders-detail-col" id="order-detail-panel"></div>
           </div>
         </div>
       </div>
@@ -284,45 +313,82 @@
       </div>
 
       <div id="seller-subview-materials" class="seller-subview">
-        <div class="panel">
-          <h2>Manage Materials &amp; Prices</h2>
-          <div class="sub">These appear on the order form. Update prices or reorder them any time.</div>
-          <div class="sub" id="materials-readonly-note" style="display:none; color: var(--rust);">You're signed in as an employee — only admins can change materials or prices.</div>
-          <div id="materials-manager"></div>
-          <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;" id="materials-edit-actions">
-            <button class="btn btn-secondary btn-small" id="add-material-btn">+ Add Material</button>
-            <button class="btn btn-ghost btn-small" id="save-materials-btn">Save Changes</button>
-            <button class="btn btn-ghost btn-small" id="update-fio-weights-btn">Update Weight/Volume from FIO</button>
-            <span class="toast" id="materials-toast"></span>
-          </div>
-        </div>
+        <div class="materials-split">
+          <div class="materials-side-col">
+            <div class="panel">
+              <h2>Default CX Exchange</h2>
+              <div class="sub">Which exchange "Update CX Prices" pulls Ask/Bid prices from.</div>
+              <select id="default-cx-exchange-select" style="width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:3px; background:var(--paper); color:var(--ink); font-family:var(--mono); font-size:13px;"></select>
+              <div style="margin-top:12px; display:flex; gap:10px;">
+                <button class="btn btn-ghost btn-small" id="save-cx-exchange-btn">Save</button>
+                <span class="toast" id="cx-exchange-toast"></span>
+              </div>
+            </div>
 
-        <div class="two-col-row">
-          <div class="panel">
-            <h2>Pickup Locations</h2>
-            <div class="sub">Options shown in the buyer's Pickup Location dropdown.</div>
-            <div id="pickup-options-list"></div>
-            <div style="margin-top:14px; display:flex; gap:10px;" id="pickup-options-actions">
-              <button class="btn btn-secondary btn-small" id="add-pickup-option-btn">+ Add Location</button>
-              <button class="btn btn-ghost btn-small" id="save-pickup-options-btn">Save Changes</button>
-              <span class="toast" id="pickup-options-toast"></span>
+            <div class="panel">
+              <h2>Pickup Locations</h2>
+              <div class="sub">Options shown in the buyer's Pickup Location dropdown.</div>
+              <div id="pickup-options-list"></div>
+              <div style="margin-top:14px; display:flex; gap:10px;" id="pickup-options-actions">
+                <button class="btn btn-secondary btn-small" id="add-pickup-option-btn">+ Add Location</button>
+                <button class="btn btn-ghost btn-small" id="save-pickup-options-btn">Save Changes</button>
+                <span class="toast" id="pickup-options-toast"></span>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h2>Currencies</h2>
+              <div class="sub">Options shown in the buyer's Currency dropdown.</div>
+              <div id="currency-options-list"></div>
+              <div style="margin-top:14px; display:flex; gap:10px;" id="currency-options-actions">
+                <button class="btn btn-secondary btn-small" id="add-currency-option-btn">+ Add Currency</button>
+                <button class="btn btn-ghost btn-small" id="save-currency-options-btn">Save Changes</button>
+                <span class="toast" id="currency-options-toast"></span>
+              </div>
             </div>
           </div>
 
-          <div class="panel">
-            <h2>Currencies</h2>
-            <div class="sub">Options shown in the buyer's Currency dropdown.</div>
-            <div id="currency-options-list"></div>
-            <div style="margin-top:14px; display:flex; gap:10px;" id="currency-options-actions">
-              <button class="btn btn-secondary btn-small" id="add-currency-option-btn">+ Add Currency</button>
-              <button class="btn btn-ghost btn-small" id="save-currency-options-btn">Save Changes</button>
-              <span class="toast" id="currency-options-toast"></span>
+          <div class="panel materials-main-col">
+            <div class="panel-title-row">
+              <h2>Manage Materials &amp; Prices</h2>
+              <button class="btn btn-ghost btn-small" id="materials-edit-toggle-btn">Edit</button>
+            </div>
+            <div class="sub">Discount %, My Price, and Show on List save automatically as you edit them. Press Edit to add, remove, reorder, or rename materials — press it again to save those and close.</div>
+            <div class="sub" id="materials-readonly-note" style="display:none; color: var(--rust);">You're signed in as an employee — only admins can change materials or prices.</div>
+
+            <div id="materials-manager"></div>
+            <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;" id="materials-edit-actions">
+              <button class="btn btn-secondary btn-small" id="add-material-btn" style="display:none;">+ Add Material</button>
+              <button class="btn btn-ghost btn-small" id="update-fio-weights-btn">Update Weight/Volume from FIO</button>
+              <button class="btn btn-ghost btn-small" id="update-cx-prices-btn">Update CX Prices</button>
+              <span class="toast" id="materials-toast"></span>
             </div>
           </div>
         </div>
       </div>
 
       <div id="seller-subview-settings" class="seller-subview">
+        <div class="panel">
+          <h2>Page Title</h2>
+          <div class="sub">Shown in the browser tab and as the main heading at the top of every page.</div>
+          <input type="text" id="site-title-input" placeholder="e.g. Lotol Materials Co.">
+          <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
+            <button class="btn btn-secondary btn-small" id="save-site-title-btn">Save Title</button>
+            <span class="toast" id="site-title-toast"></span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Accent Color</h2>
+          <div class="sub">The highlight color used for buttons, active tabs, and links — applies on top of whichever light/dark theme a visitor has chosen.</div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <input type="color" id="accent-color-input" value="#3fcdb8" style="width:60px; height:38px; padding:2px; border:1px solid var(--line); border-radius:3px; background:var(--paper); cursor:pointer;">
+            <button class="btn btn-secondary btn-small" id="save-accent-color-btn">Save Color</button>
+            <button class="btn btn-ghost btn-small" id="reset-accent-color-btn">Reset to Default</button>
+            <span class="toast" id="accent-color-toast"></span>
+          </div>
+        </div>
+
         <div class="panel">
           <h2>Order Intake</h2>
           <div class="sub">Turn this off to stop taking new orders. The order form disappears from the buyer page right away — they can still check the status of orders already placed.</div>

@@ -5,7 +5,7 @@ const DRAFT_STORAGE_KEY = 'matorder:draftOrder';
 function saveDraftOrder(){
   try{
     const items = {};
-    document.querySelectorAll('.qty-input').forEach(inp => {
+    document.querySelectorAll('#order-materials-body .qty-input').forEach(inp => {
       const qty = parseFloat(inp.value) || 0;
       if(qty > 0) items[inp.dataset.id] = qty;
     });
@@ -39,7 +39,7 @@ function loadDraftOrder(){
   if(draft.currency) document.getElementById('currency-select').value = draft.currency;
   if(draft.items){
     Object.entries(draft.items).forEach(([materialId, qty]) => {
-      const inp = document.querySelector(`.qty-input[data-id="${materialId}"]`);
+      const inp = document.querySelector(`#order-materials-body .qty-input[data-id="${materialId}"]`);
       if(inp) inp.value = qty;
     });
   }
@@ -51,7 +51,7 @@ function clearDraftOrder(){
 }
 
 function clearOrderClick(){
-  document.querySelectorAll('.qty-input').forEach(i => i.value = 0);
+  document.querySelectorAll('#order-materials-body .qty-input').forEach(i => i.value = 0);
   document.getElementById('order-username').value = '';
   document.getElementById('order-name').value = '';
   document.getElementById('order-contact').value = '';
@@ -67,7 +67,7 @@ function clearOrderClick(){
 function renderOrderTable(){
   const body = document.getElementById('order-materials-body');
   body.innerHTML = '';
-  materials.filter(m => Number(m.price) > 0).forEach(m => {
+  materials.filter(m => m.showOnOrderList !== false && Number(m.price) > 0).forEach(m => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="mat-name">${escapeHtml(m.name)}</td>
@@ -82,6 +82,7 @@ function renderOrderTable(){
   body.querySelectorAll('.qty-input').forEach(inp => {
     inp.addEventListener('input', () => { updateOrderTotals(); saveDraftOrder(); });
   });
+  enhanceNumberInputsIn(body, 'input.qty-input', 'stacked');
   updateOrderTotals();
 }
 
@@ -89,7 +90,7 @@ function updateOrderTotals(){
   let total = 0;
   let totalWeight = 0;
   let totalVolume = 0;
-  document.querySelectorAll('.qty-input').forEach(inp => {
+  document.querySelectorAll('#order-materials-body .qty-input').forEach(inp => {
     const id = inp.dataset.id;
     const mat = materials.find(m => m.id === id);
     const qty = Math.max(0, parseFloat(inp.value) || 0);
@@ -203,6 +204,7 @@ function buildBuyerTicketElement(order){
         <thead><tr><th>Material</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Subtotal</th><th class="num">Produced</th><th class="num">% Ready</th></tr></thead>
         <tbody>${ticketRowsHtml(order)}</tbody>
       </table>
+      ${order.note ? `<div class="buyer-note-display"><span class="buyer-note-tag">Your note</span>${escapeHtml(order.note)}</div>` : ''}
       ${order.sellerComment ? `<div class="comment-display"><span class="comment-tag">Note from seller</span>${escapeHtml(order.sellerComment)}</div>` : ''}
     </div>
     <div class="ticket-foot">
@@ -236,7 +238,7 @@ async function cancelBuyerOrder(order){
   }catch(e){
     console.error('Cancel failed:', e);
     if(toast){
-      toast.style.color = '#f2765a';
+      toast.style.color = 'var(--rust)';
       toast.textContent = e.message || 'Could not cancel this order.';
     }
   }
@@ -340,7 +342,7 @@ function startCooldownCountdown(remainingMs){
       cooldownInterval = null;
       return;
     }
-    toast.style.color = '#85999f';
+    toast.style.color = 'var(--ink-soft)';
     toast.textContent = `You can submit another order in ${remaining}s`;
     remaining -= 1;
   };
@@ -351,7 +353,7 @@ function startCooldownCountdown(remainingMs){
 async function submitOrder(){
   if(!ordersOpen){
     const toast = document.getElementById('order-toast');
-    toast.style.color = '#f2765a';
+    toast.style.color = 'var(--rust)';
     toast.textContent = 'New orders are currently closed.';
     return;
   }
@@ -360,7 +362,7 @@ async function submitOrder(){
     return;
   }
   const items = [];
-  document.querySelectorAll('.qty-input').forEach(inp => {
+  document.querySelectorAll('#order-materials-body .qty-input').forEach(inp => {
     const qty = Math.max(0, parseFloat(inp.value) || 0);
     if(qty > 0){
       const mat = materials.find(m => m.id === inp.dataset.id);
@@ -369,7 +371,7 @@ async function submitOrder(){
   });
   const toast = document.getElementById('order-toast');
   if(items.length === 0){
-    toast.style.color = '#f2765a';
+    toast.style.color = 'var(--rust)';
     toast.textContent = 'Add a quantity for at least one material.';
     return;
   }
@@ -377,12 +379,12 @@ async function submitOrder(){
   const rawCompanyCode = document.getElementById('order-name').value.trim();
   const companyCode = rawCompanyCode.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4);
   if(!usernameVal){
-    toast.style.color = '#f2765a';
+    toast.style.color = 'var(--rust)';
     toast.textContent = 'Enter your username.';
     return;
   }
   if(!companyCode){
-    toast.style.color = '#f2765a';
+    toast.style.color = 'var(--rust)';
     toast.textContent = 'Enter your company code.';
     return;
   }
@@ -472,7 +474,7 @@ async function doActualSubmit(order){
     const inserted = await insertOrder(order, turnstileToken);
     setLastSubmitTime();
     showOrderConfirmation(inserted);
-    document.querySelectorAll('.qty-input').forEach(i => i.value = 0);
+    document.querySelectorAll('#order-materials-body .qty-input').forEach(i => i.value = 0);
     document.getElementById('order-username').value = '';
     document.getElementById('order-name').value = '';
     document.getElementById('order-contact').value = '';
@@ -485,7 +487,7 @@ async function doActualSubmit(order){
     updatePendingBadge();
     applyCooldownState();
   }catch(e){
-    toast.style.color = '#f2765a';
+    toast.style.color = 'var(--rust)';
     toast.textContent = e.message || 'Could not submit order — try again.';
     btn.disabled = false;
   }
@@ -515,6 +517,7 @@ function showOrderConfirmation(order){
           <thead><tr><th>Material</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Subtotal</th><th class="num">Produced</th><th class="num">% Ready</th></tr></thead>
           <tbody>${ticketRowsHtml(order)}</tbody>
         </table>
+        ${order.note ? `<div class="buyer-note-display"><span class="buyer-note-tag">Your note</span>${escapeHtml(order.note)}</div>` : ''}
       </div>
       <div class="ticket-foot">
         <div class="ticket-total">${money(order.total, cur)}</div>
@@ -535,14 +538,14 @@ async function copyTicketNumber(ticketCode){
   try{
     await navigator.clipboard.writeText(ticketCode);
     if(toast){
-      toast.style.color = '#3fcf8e';
+      toast.style.color = 'var(--ok)';
       toast.textContent = 'Copied to clipboard!';
       setTimeout(() => { if(toast) toast.textContent = ''; }, 2000);
     }
   }catch(e){
     console.error('Copy failed:', e);
     if(toast){
-      toast.style.color = '#f2765a';
+      toast.style.color = 'var(--rust)';
       toast.textContent = 'Could not copy — select it manually.';
     }
   }

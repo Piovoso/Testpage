@@ -1,6 +1,7 @@
   :root{
     --paper: #141b1e;
     --paper-dim: #1c262a;
+    --paper-deep: #0d1214;
     --panel-border: #2c3d44;
     --ink: #d6e4e6;
     --ink-soft: #85999f;
@@ -16,6 +17,23 @@
     --mono: 'IBM Plex Mono', 'Courier New', monospace;
     --sans: 'IBM Plex Mono', 'Courier New', monospace;
   }
+  html.light-mode{
+    --paper: #f4f7f7;
+    --paper-dim: #e7edee;
+    --paper-deep: #ffffff;
+    --panel-border: #cbd7d9;
+    --ink: #16211f;
+    --ink-soft: #56696c;
+    --line: #cbd7d9;
+    --rust: #c94f2f;
+    --rust-dim: rgba(201,79,47,0.10);
+    --steel: #1f6f8c;
+    --steel-dim: rgba(31,111,140,0.10);
+    --ok: #197d51;
+    --ok-dim: rgba(25,125,81,0.10);
+    --accent: #128472;
+    --accent-dim: rgba(18,132,114,0.10);
+  }
   *{box-sizing:border-box;}
   body{
     margin:0;
@@ -23,12 +41,21 @@
     color: var(--ink);
     font-family: var(--sans);
     -webkit-font-smoothing: antialiased;
-    color-scheme: dark;
+    overflow-x: hidden;
   }
   .wrap{
     max-width: 880px;
     margin: 0 auto;
     padding: 28px 20px 80px;
+  }
+  /* The seller dashboard needs more horizontal room (the Orders
+     list+detail split especially). Rather than any CSS "breakout"
+     trick — fragile when nested inside a narrower parent — .wrap
+     itself just widens while the seller tab is the active one. The
+     buyer tabs are hidden at that point anyway, so this never
+     affects them. */
+  body.seller-tab-active .wrap{
+    max-width: 1400px;
   }
   header.top{
     display:flex;
@@ -60,7 +87,7 @@
   nav.tabs{
     display:flex;
     gap: 2px;
-    background: #060a0b;
+    background: var(--paper-deep);
     padding: 3px;
     border-radius: 3px;
   }
@@ -77,6 +104,13 @@
     border-radius: 2px;
     transition: background .15s ease;
   }
+  .theme-toggle-btn{
+    padding: 9px 12px !important;
+    font-size: 15px !important;
+    border: 1px solid var(--line) !important;
+    margin-left: 4px;
+  }
+  .theme-toggle-btn:hover{ background: var(--accent-dim); }
   nav.tabs button.active{
     background: var(--accent);
     color: #06201c;
@@ -268,15 +302,75 @@
   }
 
   /* Materials manager */
+  .panel-title-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom: 4px;
+  }
+  .panel-title-row h2{ margin: 0; }
+  .cx-exchange-inline-row{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--paper-dim);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    margin: 14px 0;
+    flex-wrap: wrap;
+  }
+  .cx-exchange-inline-row label{
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ink-soft);
+  }
+  .cx-exchange-inline-row select{
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
   .mat-manager-row{
     display:grid;
-    grid-template-columns: 54px 1fr 110px 130px 40px;
+    grid-template-columns: 1.3fr 0.7fr 1.5fr 1.6fr 1.1fr 0.9fr 0.9fr 1fr;
     gap: 10px;
     margin-bottom: 8px;
     align-items:center;
   }
-  .mat-manager-row input{ padding: 8px 10px; border:1px solid var(--line); border-radius:3px; font-family: var(--sans); font-size: 14px; background: var(--paper); color: var(--ink);}
+  #materials-manager.edit-mode .mat-manager-row{
+    grid-template-columns: 28px 1.3fr 0.7fr 1.5fr 1.6fr 1.1fr 0.9fr 0.9fr 1fr 36px;
+  }
+  .mat-ticker-display{
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 8px 0;
+  }
+  .mat-manager-row input[type="text"], .mat-manager-row input[type="number"]{ padding: 8px 10px; border:1px solid var(--line); border-radius:3px; font-family: var(--sans); font-size: 14px; background: var(--paper); color: var(--ink); width: 100%;}
   .mat-manager-row input.price{ font-family: var(--mono); text-align:right; }
+  .mat-manager-row input[type="checkbox"]{ justify-self: center; width: 16px; height: 16px; accent-color: var(--accent); }
+  .cx-price-display{
+    font-family: var(--mono);
+    font-size: 13px;
+    text-align: right;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  .drag-handle{
+    cursor: grab;
+    color: var(--ink-soft);
+    text-align: center;
+    font-size: 16px;
+    user-select: none;
+  }
+  .mat-manager-row.dragging{ opacity: 0.4; }
   .mat-manager-header{
     font-family: var(--mono);
     font-size: 10.5px;
@@ -285,7 +379,11 @@
     color: var(--ink-soft);
     margin-bottom: 4px;
   }
-  .mat-manager-header div:nth-child(3), .mat-manager-header div:nth-child(4){ text-align: right; }
+  .mat-manager-header div:nth-child(3),
+  .mat-manager-header div:nth-child(4),
+  .mat-manager-header div:nth-child(5),
+  .mat-manager-header div:nth-child(6),
+  .mat-manager-header div:nth-child(7){ text-align: center; }
   .move-btns{ display:flex; flex-direction:column; gap: 2px; }
   .move-btns .icon-btn{
     padding: 2px 6px;
@@ -500,6 +598,70 @@
     opacity: 0.85;
     pointer-events: none;
   }
+  /* Option C — stacked custom arrows with a divider. The standard for
+     every quantity-style number input except Discount % and Price. */
+  .stepper-stacked{
+    display:inline-flex;
+    align-items:stretch;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+    background: var(--paper);
+  }
+  .stepper-stacked input{
+    border: none !important;
+    background: transparent !important;
+    padding-right: 10px !important;
+  }
+  .stepper-stacked input::-webkit-outer-spin-button,
+  .stepper-stacked input::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
+  .stepper-stacked input[type="number"]{ -moz-appearance: textfield; }
+  .stepper-arrows{ display:flex; flex-direction:column; border-left: 1px solid var(--line); }
+  .stepper-arrows button{
+    width: 20px;
+    height: 50%;
+    background: var(--paper-dim);
+    border: none;
+    color: var(--ink-soft);
+    font-size: 8px;
+    cursor: pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family: var(--mono);
+  }
+  .stepper-arrows button:first-child{ border-bottom: 1px solid var(--line); }
+  .stepper-arrows button:hover{ background: var(--accent-dim); color: var(--accent); }
+
+  /* Option B — flanking minus/plus buttons. Standard for Discount % only. */
+  .stepper-flanking{
+    display:inline-flex;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .stepper-flanking input{
+    border: none !important;
+    background: transparent !important;
+    border-left: 1px solid var(--line) !important;
+    border-right: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    text-align: center !important;
+  }
+  .stepper-flanking input::-webkit-outer-spin-button,
+  .stepper-flanking input::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
+  .stepper-flanking input[type="number"]{ -moz-appearance: textfield; }
+  .stepper-btn{
+    width: 26px;
+    background: var(--paper-dim);
+    border: none;
+    color: var(--ink-soft);
+    font-size: 14px;
+    cursor: pointer;
+    font-family: var(--mono);
+  }
+  .stepper-btn:hover{ background: var(--accent-dim); color: var(--accent); }
+
   .spinner-overlay-wrap{ position: relative; min-height: 80px; }
   .spinner-overlay{
     position: absolute; inset: 0;
@@ -567,7 +729,7 @@
 
   .site-note-banner{
     width: 100%;
-    background: #060a0b;
+    background: var(--paper-deep);
     color: var(--ink);
     text-align: center;
     padding: 9px 20px;
@@ -837,6 +999,95 @@
   .two-col-row .panel{ margin-bottom: 0; }
   @media (max-width: 700px){
     .two-col-row{ grid-template-columns: 1fr; }
+  }
+
+  .orders-split{
+    display:grid;
+    grid-template-columns: 300px 1fr;
+    gap: 16px;
+    align-items:start;
+  }
+  @media (max-width: 800px){
+    .orders-split{ grid-template-columns: 1fr; }
+  }
+  .materials-split{
+    display:grid;
+    grid-template-columns: 300px 1fr;
+    gap: 16px;
+    align-items:start;
+  }
+  .materials-side-col{ display:flex; flex-direction:column; gap: 16px; min-width: 0; }
+  .materials-side-col .panel{ margin-bottom: 0; }
+  .materials-main-col{ min-width: 0; }
+  @media (max-width: 900px){
+    .materials-split{ grid-template-columns: 1fr; }
+  }
+  .orders-list-col{ min-width: 0; }
+  .order-row{
+    padding: 11px 13px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    background: var(--paper-dim);
+  }
+  .order-row:hover{ border-color: var(--accent); }
+  .order-row.selected{
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    border-left-width: 3px;
+    padding-left: 11px;
+  }
+  .order-row .row-id{ font-size: 12px; font-weight: 700; }
+  .order-row .row-company{ font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
+  .order-row .row-meta{ font-size: 10.5px; color: var(--ink-soft); margin-top: 4px; display:flex; justify-content:space-between; gap:8px; }
+  .order-row .row-bottom{ display:flex; justify-content:space-between; align-items:center; margin-top: 6px; }
+  .order-row .row-progress{ font-size: 10px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .orders-detail-col{ min-width: 0; }
+  .orders-detail-col .ticket{ margin-bottom: 0; }
+
+  .dots-menu-wrap{ position: relative; }
+  .dots-btn{ padding: 8px 11px; font-size: 14px; line-height: 1; }
+  .dots-menu{
+    position: absolute; bottom: 100%; right: 0; margin-bottom: 6px;
+    background: var(--paper); border: 1px solid var(--line); border-radius: 3px;
+    min-width: 160px; z-index: 5; overflow: hidden;
+  }
+  .dots-menu-item{ padding: 9px 12px; font-size: 12px; cursor: pointer; }
+  .dots-menu-item:hover{ background: var(--accent-dim); color: var(--accent); }
+  .dots-menu-item.danger{ color: var(--rust); }
+  .dots-menu-item.danger:hover{ background: rgba(242,118,90,0.14); }
+
+  .orders-pagination{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap: 12px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .page-size-control{
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+  }
+  .page-size-control select{
+    padding: 5px 8px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .page-nav{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--ink-soft);
   }
 
   .order-search-row{
@@ -1140,9 +1391,9 @@
     gap: 10px;
   }
   .comment-display{
-    background: var(--paper-dim);
+    background: var(--paper-deep);
     border-left: 3px solid var(--steel);
-    padding: 10px 12px;
+    padding: 12px 14px;
     border-radius: 3px;
     font-size: 13.5px;
     margin-top: 10px;
@@ -1154,6 +1405,25 @@
     text-transform: uppercase;
     letter-spacing: 1px;
     color: var(--steel);
+    display:block;
+    margin-bottom: 4px;
+  }
+
+  .buyer-note-display{
+    background: var(--paper-deep);
+    border-left: 3px solid var(--accent);
+    padding: 12px 14px;
+    border-radius: 3px;
+    font-size: 13.5px;
+    margin-top: 10px;
+    white-space: pre-wrap;
+  }
+  .buyer-note-display .buyer-note-tag{
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
     display:block;
     margin-bottom: 4px;
   }

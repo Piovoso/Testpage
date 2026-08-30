@@ -94,6 +94,8 @@ async function applyLoggedInState(profile){
   updatePendingBadge();
   await loadNoticeIntoEditor();
   await loadSiteNoteIntoEditor();
+  await loadSiteTitleIntoEditor();
+  await loadAccentColorIntoEditor();
   document.getElementById('orders-open-toggle').checked = ordersOpen;
   document.getElementById('orders-open-label').textContent = ordersOpen ? 'Currently accepting new orders' : 'New orders are currently closed';
 }
@@ -117,8 +119,10 @@ function applyRoleVisibility(){
   const isAdmin = sellerRole === 'admin';
   const readonlyNote = document.getElementById('materials-readonly-note');
   const editActions = document.getElementById('materials-edit-actions');
+  const editToggleBtn = document.getElementById('materials-edit-toggle-btn');
   if(readonlyNote) readonlyNote.style.display = isAdmin ? 'none' : 'block';
   if(editActions) editActions.style.display = isAdmin ? 'flex' : 'none';
+  if(editToggleBtn) editToggleBtn.style.display = isAdmin ? 'inline-block' : 'none';
 
   document.getElementById('signed-in-label').textContent = `Signed in as ${sellerName} (${sellerRole})`;
 
@@ -164,7 +168,7 @@ async function changeAdminUsername(){
   const toast = document.getElementById('password-toast');
   const val = input.value.trim();
   if(val.length < 3){
-    toast.style.color = '#f2765a';
+    toast.style.color = 'var(--rust)';
     toast.textContent = 'Use at least 3 characters.';
     return;
   }
@@ -175,12 +179,12 @@ async function changeAdminUsername(){
     input.value = '';
     loadAdminAccountIntoEditor();
     applyRoleVisibility();
-    toast.style.color = '#3fcf8e';
+    toast.style.color = 'var(--ok)';
     toast.textContent = 'Admin username updated.';
     setTimeout(() => toast.textContent = '', 3000);
   }catch(e){
     console.error('Username save failed:', e);
-    toast.style.color = '#f2765a';
+    toast.style.color = 'var(--rust)';
     toast.textContent = e.message || 'Could not update username.';
   }
 }
@@ -192,12 +196,12 @@ async function changeAdminPassword(){
   const val = input.value.trim();
   const currentVal = currentInput.value;
   if(!currentVal){
-    toast.style.color = '#f2765a';
+    toast.style.color = 'var(--rust)';
     toast.textContent = 'Enter your current password to confirm.';
     return;
   }
   if(val.length < 4){
-    toast.style.color = '#f2765a';
+    toast.style.color = 'var(--rust)';
     toast.textContent = 'Use at least 4 characters.';
     return;
   }
@@ -205,12 +209,12 @@ async function changeAdminPassword(){
     await callManageAccount('changePassword', { id: authSession.userId, newPassword: val, currentPassword: currentVal });
     input.value = '';
     currentInput.value = '';
-    toast.style.color = '#3fcf8e';
+    toast.style.color = 'var(--ok)';
     toast.textContent = 'Admin password updated.';
     setTimeout(() => toast.textContent = '', 2500);
   }catch(e){
     console.error('Password save failed:', e);
-    toast.style.color = '#f2765a';
+    toast.style.color = 'var(--rust)';
     toast.textContent = e.message || 'Could not update password.';
   }
 }
@@ -307,7 +311,7 @@ async function addEmployeeClick(){
   const name = nameInput.value.trim();
   const password = passwordInput.value.trim();
   if(!name || password.length < 4){
-    toast.style.color = '#f2765a';
+    toast.style.color = 'var(--rust)';
     toast.textContent = 'Enter a name and a password of at least 4 characters.';
     return;
   }
@@ -317,12 +321,12 @@ async function addEmployeeClick(){
     passwordInput.value = '';
     await loadAccountsList();
     renderEmployeesList();
-    toast.style.color = '#3fcf8e';
+    toast.style.color = 'var(--ok)';
     toast.textContent = 'Employee added.';
     setTimeout(() => toast.textContent = '', 2500);
   }catch(e){
     console.error('Add employee failed:', e);
-    toast.style.color = '#f2765a';
+    toast.style.color = 'var(--rust)';
     toast.textContent = e.message || 'Could not add employee.';
   }
 }

@@ -26,6 +26,122 @@ function uid(prefix){
   return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
 }
 
+/* Wraps a native number input with a custom stepper UI (hides the native
+   spinner arrows), matching the app's theme. mode: 'stacked' = up/down
+   arrows with a divider (used everywhere quantities are entered), or
+   'flanking' = minus/plus buttons on either side (used for Discount %
+   specifically). Re-dispatches a real 'input' event on every click, so
+   whatever listener is already wired to that field (recalculating totals,
+   readiness %, etc.) keeps working completely unchanged. Call this AFTER
+   wiring the field's normal listeners, and after it's already in the DOM. */
+function enhanceNumberInput(input, mode){
+  if(!input || input.dataset.stepperEnhanced) return;
+  input.dataset.stepperEnhanced = 'true';
+  const step = parseFloat(input.step) || 1;
+  const hasMin = input.min !== '';
+  const hasMax = input.max !== '';
+  const min = hasMin ? parseFloat(input.min) : -Infinity;
+  const max = hasMax ? parseFloat(input.max) : Infinity;
+
+  const bump = (delta) => {
+    if(input.disabled) return;
+    const current = parseFloat(input.value) || 0;
+    let next = current + delta;
+    if(next < min) next = min;
+    if(next > max) next = max;
+    input.value = next;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  const wrapper = document.createElement('div');
+  input.parentNode.insertBefore(wrapper, input);
+
+  if(mode === 'flanking'){
+    wrapper.className = 'stepper-flanking';
+    const minusBtn = document.createElement('button');
+    minusBtn.type = 'button'; minusBtn.className = 'stepper-btn'; minusBtn.textContent = '−';
+    minusBtn.addEventListener('click', () => bump(-step));
+    const plusBtn = document.createElement('button');
+    plusBtn.type = 'button'; plusBtn.className = 'stepper-btn'; plusBtn.textContent = '+';
+    plusBtn.addEventListener('click', () => bump(step));
+    wrapper.appendChild(minusBtn);
+    wrapper.appendChild(input);
+    wrapper.appendChild(plusBtn);
+  }else{
+    wrapper.className = 'stepper-stacked';
+    const arrowsWrap = document.createElement('div');
+    arrowsWrap.className = 'stepper-arrows';
+    const upBtn = document.createElement('button');
+    upBtn.type = 'button'; upBtn.textContent = '▲';
+    upBtn.addEventListener('click', () => bump(step));
+    const downBtn = document.createElement('button');
+    downBtn.type = 'button'; downBtn.textContent = '▼';
+    downBtn.addEventListener('click', () => bump(-step));
+    arrowsWrap.appendChild(upBtn);
+    arrowsWrap.appendChild(downBtn);
+    wrapper.appendChild(input);
+    wrapper.appendChild(arrowsWrap);
+  }
+}
+
+function enhanceNumberInputsIn(containerEl, selector, mode){
+  if(!containerEl) return;
+  containerEl.querySelectorAll(selector).forEach(inp => enhanceNumberInput(inp, mode));
+}
+
+let customAccentColor = null;
+
+function hexToRgba(hex, alpha){
+  const clean = String(hex || '').replace('#', '');
+  const r = parseInt(clean.substring(0, 2), 16) || 0;
+  const g = parseInt(clean.substring(2, 4), 16) || 0;
+  const b = parseInt(clean.substring(4, 6), 16) || 0;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/* Overrides the theme's default teal with a custom accent color, applied
+   on top of whichever theme (light/dark) is currently active — recomputes
+   the "dim" tint too, since that needs a different alpha per theme to stay
+   readable. Pass null to go back to the theme's own default. */
+function applyAccentColor(hex){
+  customAccentColor = hex || null;
+  const root = document.documentElement;
+  if(!hex){
+    root.style.removeProperty('--accent');
+    root.style.removeProperty('--accent-dim');
+    return;
+  }
+  const isLight = root.classList.contains('light-mode');
+  root.style.setProperty('--accent', hex);
+  root.style.setProperty('--accent-dim', hexToRgba(hex, isLight ? 0.10 : 0.14));
+}
+
+/* Light/dark theme toggle. The actual color values live entirely in CSS
+   (html.light-mode overrides the same custom properties dark mode sets on
+   :root) — this just flips the class, keeps color-scheme in sync so native
+   controls (checkboxes, etc.) match, updates the toggle button's icon, and
+   remembers the choice. A tiny inline script in <head> applies the saved
+   choice before first paint, so there's no flash of the wrong theme. */
+function applyTheme(mode){
+  document.documentElement.classList.toggle('light-mode', mode === 'light');
+  document.documentElement.style.colorScheme = mode;
+  const btn = document.getElementById('theme-toggle-btn');
+  if(btn) btn.textContent = mode === 'light' ? '☀️' : '🌙';
+  try{ localStorage.setItem('matorder:theme', mode); }catch(e){}
+  if(customAccentColor) applyAccentColor(customAccentColor); // recompute --accent-dim for the new theme
+}
+
+function toggleTheme(){
+  const isLight = document.documentElement.classList.contains('light-mode');
+  applyTheme(isLight ? 'dark' : 'light');
+}
+
+function initTheme(){
+  let saved = 'dark';
+  try{ saved = localStorage.getItem('matorder:theme') || 'dark'; }catch(e){}
+  applyTheme(saved);
+}
+
 /* Spinner overlay: dims whatever's already in a container and shows a
    spinner over it while a fetch is in flight. containerEl keeps its old
    content underneath (dimmed/blurred) until you overwrite it yourself. */
