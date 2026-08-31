@@ -73,7 +73,8 @@ async function loadMaterials(){
       volume: Number(r.volume) || 0,
       discountPercent: Number(r.discount_percent) || 0,
       showOnOrderList: r.show_on_order_list !== false,
-      cxPrice: (r.cx_price === null || r.cx_price === undefined) ? null : Number(r.cx_price)
+      cxPrice: (r.cx_price === null || r.cx_price === undefined) ? null : Number(r.cx_price),
+      category: r.category || null
     }));
   }catch(e){
     // Deliberately NOT resetting `materials` to [] here — a failed request
@@ -225,6 +226,19 @@ async function loadDefaultCxExchange(){
     console.error(e);
     return 'NC1';
   }
+}
+
+async function loadXitActOrigin(){
+  try{
+    const rows = await sbFetch('app_settings?select=xit_act_origin&id=eq.1');
+    return rows && rows[0] ? (rows[0].xit_act_origin || '') : '';
+  }catch(e){
+    console.error(e);
+    return '';
+  }
+}
+async function saveXitActOrigin(origin){
+  await callManageShopSettings('saveXitActOrigin', { origin });
 }
 async function saveDefaultCxExchange(exchange){
   await callManageShopSettings('saveDefaultCxExchange', { exchange });

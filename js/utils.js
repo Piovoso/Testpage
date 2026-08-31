@@ -156,10 +156,78 @@ function showSpinner(containerEl, label){
   overlay.innerHTML = `<div class="spinner"></div><div class="spinner-label">${label || 'Loading…'}</div>`;
   containerEl.appendChild(overlay);
 }
-function hideSpinner(containerEl){
-  if(!containerEl) return;
-  const overlay = containerEl.querySelector('.spinner-overlay');
-  if(overlay) overlay.remove();
+
+/* Every toast across the app follows the same two-line shape (set a color,
+   set the text) repeated dozens of times with copy-pasted styling. These
+   two helpers replace that — setToastError for failures, setToastSuccess
+   for confirmations, with an optional auto-clear delay for the latter
+   (most success toasts fade themselves after ~2s). */
+function setToastError(el, message){
+  if(!el) return;
+  el.style.color = 'var(--rust)';
+  el.textContent = message;
+}
+function setToastSuccess(el, message, autoClearMs){
+  if(!el) return;
+  el.style.color = 'var(--ok)';
+  el.textContent = message;
+  if(autoClearMs){
+    setTimeout(() => { if(el) el.textContent = ''; }, autoClearMs);
+  }
+}
+
+/* The "admin only" guard-with-error-toast shape repeated across the
+   seller-side editors. Note this is deliberately NOT used for checks with
+   a different rule (e.g. "admin OR an employee with Settings access") —
+   those aren't duplication, they're a genuinely different authorization
+   rule and stay written out explicitly. */
+function requireAdmin(toastEl, message){
+  if(sellerRole === 'admin') return true;
+  if(toastEl) setToastError(toastEl, message);
+  return false;
+}
+
+/* Material category → color palette, extracted from a real reference
+   chart (pixel-sampled colors, not guessed) and cross-checked against
+   Refined PrUn's own source where possible — 5 of these are exact
+   confirmed matches (agricultural products, consumables basic/luxury,
+   liquids, plastics); the rest are best-effort from the same chart.
+   Category itself comes from FIO's real per-material data once synced
+   ("Update Weight/Volume from FIO" also captures it now), not guessed. */
+const MATERIAL_CATEGORY_COLORS = {
+  "agricultural products": "#003900",
+  "consumables (basic)": "#bd3461",
+  "consumables (luxury)": "#6b0003",
+  "liquids": "#66a5d6",
+  "plastics": "#7f2568",
+  "food": "#a82d2c",
+  "metals": "#361d4f",
+  "minerals": "#9c744c",
+  "ship engines": "#9d2d03",
+  "electronic devices": "#132266",
+  "chemicals": "#2f5371",
+  "electronic parts": "#591796",
+  "construction prefabs": "#1c5fd7",
+  "electronic systems": "#5f32bb",
+  "gases": "#036c6e",
+  "ores": "#575c66",
+  "ship parts": "#9c5703",
+  "elements": "#441017",
+  "construction materials": "#805123",
+  "software systems": "#10103c",
+  "software components": "#5bb05b",
+  "unit prefabs": "#1a432c"
+};
+const MATERIAL_CATEGORY_DEFAULT_COLOR = "#3d4a4d"; // neutral gray for anything uncategorized
+
+/* Renders a material ticker as a small colored chip, matching the
+   category-color convention from Refined PrUn. Falls back to a neutral
+   gray chip if the material has no category set yet (e.g. added before
+   an FIO sync, or FIO doesn't recognize the ticker). */
+function materialTickerChip(name, category){
+  const key = (category || '').toLowerCase().trim();
+  const color = MATERIAL_CATEGORY_COLORS[key] || MATERIAL_CATEGORY_DEFAULT_COLOR;
+  return `<span class="mat-ticker-chip" style="background:${color};">${escapeHtml(name)}</span>`;
 }
 
 const STATUS_LABELS = {
@@ -239,6 +307,25 @@ function formatTimelineDate(iso){
 /* Buyer-facing vertical progress tracker: Order placed -> Confirmed ->
    In production -> Ready/Delivered, with a distinct terminal branch for
    a denied/cancelled order. */
+/* Compact single-line version of the above, for the seller's order detail
+   card — shows just the current stage, not the full history. The buyer-
+   facing views still use the full orderTimelineHtml() timeline. */
+function latestActivityHtml(order){
+  if(order.status === 'denied'){
+    const time = order.deniedAt ? `<span class="odc-activity-time">· ${formatTimelineDate(order.deniedAt)}</span>` : '';
+    return `<div class="odc-latest-activity"><span class="dot denied"></span>Order cancelled${time}</div>`;
+  }
+  const stages = [
+    { status: 'pending', label: 'Order placed', time: order.createdAt },
+    { status: 'confirmed', label: 'Order confirmed', time: order.confirmedAt },
+    { status: 'production', label: 'Production started', time: order.productionAt },
+    { status: 'delivered', label: 'Delivered', time: order.deliveredAt }
+  ];
+  const current = stages.find(s => s.status === order.status) || stages[0];
+  const time = current.time ? `<span class="odc-activity-time">· ${formatTimelineDate(current.time)}</span>` : '';
+  return `<div class="odc-latest-activity"><span class="dot ${order.status}"></span>${current.label}${time}</div>`;
+}
+
 function orderTimelineHtml(order){
   if(order.status === 'denied'){
     return `
@@ -299,9 +386,10 @@ function ticketRowsHtml(order, editableProduced){
     const producedCell = editableProduced
       ? `<input type="number" min="0" max="${it.qty}" step="1" value="${produced}" data-produced-input="${order.id}:${it.materialId}" class="qty-input">`
       : `${produced}`;
+    const mat = materials.find(m => m.id === it.materialId);
     return `
     <tr>
-      <td>${escapeHtml(it.name)}</td>
+      <td>${materialTickerChip(it.name, mat ? mat.category : null)}</td>
       <td class="num">${it.qty}</td>
       <td class="num">${money(it.price, cur)}</td>
       <td class="num">${money(it.subtotal, cur)}</td>

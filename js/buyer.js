@@ -70,9 +70,9 @@ function renderOrderTable(){
   materials.filter(m => m.showOnOrderList !== false && Number(m.price) > 0).forEach(m => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="mat-name">${escapeHtml(m.name)}</td>
+      <td class="mat-name">${materialTickerChip(m.name, m.category)}</td>
       <td class="num"><input type="number" min="0" step="1" value="0" data-id="${m.id}" class="qty-input"></td>
-      <td class="num price-cell" id="price-${m.id}">${money(m.price)}</td>
+      <td class="num" id="price-${m.id}">${money(m.price)}</td>
       <td class="num" id="sub-${m.id}">${money(0)}</td>
       <td class="num" id="weight-${m.id}">0.00</td>
       <td class="num" id="volume-${m.id}">0.00</td>
@@ -238,8 +238,7 @@ async function cancelBuyerOrder(order){
   }catch(e){
     console.error('Cancel failed:', e);
     if(toast){
-      toast.style.color = 'var(--rust)';
-      toast.textContent = e.message || 'Could not cancel this order.';
+      setToastError(toast, e.message || 'Could not cancel this order.');
     }
   }
 }
@@ -353,8 +352,7 @@ function startCooldownCountdown(remainingMs){
 async function submitOrder(){
   if(!ordersOpen){
     const toast = document.getElementById('order-toast');
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'New orders are currently closed.';
+    setToastError(toast, 'New orders are currently closed.');
     return;
   }
   if(Date.now() - getLastSubmitTime() < ORDER_COOLDOWN_MS){
@@ -371,21 +369,18 @@ async function submitOrder(){
   });
   const toast = document.getElementById('order-toast');
   if(items.length === 0){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'Add a quantity for at least one material.';
+    setToastError(toast, 'Add a quantity for at least one material.');
     return;
   }
   const usernameVal = document.getElementById('order-username').value.trim();
   const rawCompanyCode = document.getElementById('order-name').value.trim();
   const companyCode = rawCompanyCode.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4);
   if(!usernameVal){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'Enter your username.';
+    setToastError(toast, 'Enter your username.');
     return;
   }
   if(!companyCode){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'Enter your company code.';
+    setToastError(toast, 'Enter your company code.');
     return;
   }
   const total = items.reduce((s,i) => s + i.subtotal, 0);
@@ -487,8 +482,7 @@ async function doActualSubmit(order){
     updatePendingBadge();
     applyCooldownState();
   }catch(e){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = e.message || 'Could not submit order — try again.';
+    setToastError(toast, e.message || 'Could not submit order — try again.');
     btn.disabled = false;
   }
 }
@@ -538,15 +532,12 @@ async function copyTicketNumber(ticketCode){
   try{
     await navigator.clipboard.writeText(ticketCode);
     if(toast){
-      toast.style.color = 'var(--ok)';
-      toast.textContent = 'Copied to clipboard!';
-      setTimeout(() => { if(toast) toast.textContent = ''; }, 2000);
+      setToastSuccess(toast, 'Copied to clipboard!', 2000);
     }
   }catch(e){
     console.error('Copy failed:', e);
     if(toast){
-      toast.style.color = 'var(--rust)';
-      toast.textContent = 'Could not copy — select it manually.';
+      setToastError(toast, 'Could not copy — select it manually.');
     }
   }
 }

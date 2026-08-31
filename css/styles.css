@@ -309,33 +309,6 @@
     margin-bottom: 4px;
   }
   .panel-title-row h2{ margin: 0; }
-  .cx-exchange-inline-row{
-    display:flex;
-    align-items:center;
-    gap: 10px;
-    padding: 10px 12px;
-    background: var(--paper-dim);
-    border: 1px solid var(--line);
-    border-radius: 3px;
-    margin: 14px 0;
-    flex-wrap: wrap;
-  }
-  .cx-exchange-inline-row label{
-    font-family: var(--mono);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--ink-soft);
-  }
-  .cx-exchange-inline-row select{
-    padding: 6px 10px;
-    border: 1px solid var(--line);
-    border-radius: 3px;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: var(--mono);
-    font-size: 13px;
-  }
 
   .mat-manager-row{
     display:grid;
@@ -384,13 +357,6 @@
   .mat-manager-header div:nth-child(5),
   .mat-manager-header div:nth-child(6),
   .mat-manager-header div:nth-child(7){ text-align: center; }
-  .move-btns{ display:flex; flex-direction:column; gap: 2px; }
-  .move-btns .icon-btn{
-    padding: 2px 6px;
-    font-size: 11px;
-    color: var(--steel);
-  }
-  .move-btns .icon-btn:disabled{ opacity: 0.25; cursor: not-allowed; }
   .icon-btn{
     background: none;
     border: 1px solid var(--line);
@@ -695,6 +661,7 @@
     padding-bottom: 18px;
   }
   .timeline-step:last-child{ padding-bottom: 0; }
+  .timeline-content{ flex: 1; min-width: 0; }
   .timeline-marker{
     width: 22px; height: 22px;
     border-radius: 50%;
@@ -946,29 +913,121 @@
   .status-denied{ background: var(--rust-dim); color: var(--rust); }
   .stamp-denied{ color: var(--rust); border-color: var(--rust); }
 
-  .currency-row{
+  .mat-ticker-chip{
+    display:inline-block;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    color: #f2f6f6;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.35);
+    white-space: nowrap;
+  }
+
+  /* Order detail card (odc) — the seller's single-order view in the
+     Orders tab's right-hand panel. */
+  .dot{
+    display:inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+    flex-shrink: 0;
+  }
+  .dot.pending{ background: var(--rust); }
+  .dot.confirmed{ background: var(--accent); }
+  .dot.production{ background: var(--steel); }
+  .dot.delivered{ background: var(--ok); }
+  .dot.denied{ background: var(--ink-soft); }
+
+  .odc-header{
     display:flex;
-    align-items:center;
-    gap: 10px;
-    margin-bottom: 14px;
+    justify-content:space-between;
+    align-items:flex-start;
+    padding: 16px 20px;
+    background: var(--paper-dim);
+    border-bottom: 1px dashed var(--line);
+    gap: 12px;
     flex-wrap: wrap;
   }
-  .currency-row label{
+  .odc-id-row{ display:flex; align-items:center; gap: 12px; flex-wrap: wrap; }
+  .odc-id{ font-family: var(--mono); font-size: 15px; font-weight: 700; }
+  .odc-status-inline{
+    display:inline-flex;
+    align-items:center;
     font-family: var(--mono);
     font-size: 11px;
-    text-transform: uppercase;
     letter-spacing: 1px;
     color: var(--ink-soft);
   }
-  .currency-row select{
+  .odc-username{ font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; }
+  .odc-total{ font-size: 17px; font-weight: 700; white-space: nowrap; }
+
+  .odc-section{ padding: 14px 20px; border-bottom: 1px dashed var(--line); }
+  .odc-section:last-of-type{ border-bottom: none; }
+  .odc-section-label{
     font-family: var(--mono);
-    font-size: 13px;
-    padding: 7px 10px;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .odc-two-col{ display:flex; justify-content:space-between; gap: 12px; flex-wrap: wrap; }
+  .odc-value{ font-size: 14px; font-weight: 600; }
+  .odc-subtext{ font-size: 12px; color: var(--ink-soft); margin-top: 6px; }
+
+  .odc-progress-row{ display:flex; align-items:center; gap: 12px; }
+  .odc-progress-row .progress-track{ flex:1; }
+  .odc-progress-pct{ font-family: var(--mono); font-size: 13px; font-weight: 700; white-space: nowrap; }
+
+  table.odc-table{ width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.odc-table th{
+    text-align:left;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ink-soft);
+    padding: 4px 6px 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  table.odc-table th.num, table.odc-table td.num{ text-align:right; }
+  table.odc-table td{ padding: 6px; border-bottom: 1px dashed var(--line); }
+  table.odc-table tr:last-child td{ border-bottom: none; }
+
+  .odc-pills{ display:flex; flex-wrap: wrap; gap: 8px; }
+  .odc-pill{
+    display:inline-block;
+    padding: 5px 10px;
     border: 1px solid var(--line);
     border-radius: 3px;
-    background: var(--paper);
+    font-size: 12px;
     color: var(--ink);
+    text-decoration:none;
+    background: var(--paper);
   }
+  .odc-pill:hover{ border-color: var(--accent); color: var(--accent); }
+
+  .odc-note{
+    font-size: 13px;
+    font-style: italic;
+    color: var(--ink);
+    background: var(--paper-deep);
+    border-left: 3px solid var(--accent);
+    padding: 10px 12px;
+    border-radius: 3px;
+  }
+
+  .odc-latest-activity{ display:flex; align-items:center; font-size: 13px; color: var(--ink); }
+  .odc-latest-activity .dot{ width:7px; height:7px; }
+  .odc-activity-time{ color: var(--ink-soft); margin-left: 6px; font-size: 12px; }
+
+  .odc-actions{ padding: 16px 20px; display:flex; align-items:center; gap: 8px; flex-wrap: wrap; }
+  .odc-actions-secondary{ display:flex; align-items:center; gap: 8px; flex-wrap: wrap; }
+
+
 
   .status-badge-row{
     display:flex;
@@ -990,15 +1049,7 @@
   }
   .pending-badge .count{ font-weight: 700; font-size: 14px; }
 
-  .two-col-row{
-    display:grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    align-items: start;
-  }
-  .two-col-row .panel{ margin-bottom: 0; }
   @media (max-width: 700px){
-    .two-col-row{ grid-template-columns: 1fr; }
   }
 
   .orders-split{
@@ -1318,21 +1369,6 @@
   #status-check-result{ margin-top: 16px; }
   #status-check-result .empty-state{ padding: 24px 10px; }
 
-  .denied-header{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    cursor: pointer;
-    user-select: none;
-  }
-  .denied-header h2{ font-size: 15px; }
-  .denied-chevron{
-    font-family: var(--mono);
-    font-size: 16px;
-    color: var(--ink-soft);
-    transition: transform .15s ease;
-  }
-  .denied-chevron.open{ transform: rotate(180deg); }
 
   .btn-delete{ background: var(--rust); color: white; }
   .btn-delete:hover{ opacity: 0.9; }
@@ -1366,30 +1402,6 @@
     color: var(--ink);
   }
 
-  .comment-box{
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px dashed var(--line);
-  }
-  .comment-box label{
-    font-family: var(--mono);
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--ink-soft);
-    display:block;
-    margin-bottom: 6px;
-  }
-  .comment-box textarea{
-    min-height: 44px;
-    font-size: 13px;
-  }
-  .comment-box .comment-actions{
-    margin-top: 8px;
-    display:flex;
-    align-items:center;
-    gap: 10px;
-  }
   .comment-display{
     background: var(--paper-deep);
     border-left: 3px solid var(--steel);

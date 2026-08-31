@@ -204,7 +204,7 @@ function applyImportedQuantities(){
   materials.forEach(mat => {
     const ticker = mat.name.toUpperCase();
     if(!(ticker in aggregate)) return;
-    const inp = document.querySelector(`.qty-input[data-id="${mat.id}"]`);
+    const inp = document.querySelector(`#order-materials-body .qty-input[data-id="${mat.id}"]`);
     if(inp) inp.value = Math.round(aggregate[ticker]);
   });
 

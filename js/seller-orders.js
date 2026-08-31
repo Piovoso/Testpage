@@ -169,9 +169,10 @@ function renderOrderDetail(){
     ? order.items.map(it => {
         const produced = Math.max(0, Math.min(it.qty, Number(it.producedQty) || 0));
         const pct = it.qty > 0 ? Math.round((produced / it.qty) * 100) : 0;
+        const mat = materials.find(m => m.id === it.materialId);
         return `
         <tr>
-          <td>${escapeHtml(it.name)}</td>
+          <td>${materialTickerChip(it.name, mat ? mat.category : null)}</td>
           <td class="num"><input type="number" min="0" step="1" value="${it.qty}" data-seller-qty="${order.id}:${it.materialId}" class="qty-input"></td>
           <td class="num">${money(it.price, cur)}</td>
           <td class="num" id="seller-sub-${order.id}-${it.materialId}">${money(it.subtotal, cur)}</td>
@@ -180,58 +181,75 @@ function renderOrderDetail(){
         </tr>
       `;
       }).join('')
-    : ticketRowsHtml(order, sellerRole === 'admin' || sellerRole === 'employee');
+    : ticketRowsHtml(order, true);
 
-  let footRight;
+  let primaryBtn = '';
+  let secondaryBtns = '';
   if(isEditing){
-    footRight = `
-      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-        <div style="display:flex; gap:8px;">
-          <button class="btn btn-primary btn-small" data-save-edit="${order.id}">Save Changes</button>
-          <button class="btn btn-ghost btn-small" data-cancel-edit="${order.id}">Cancel Edit</button>
-        </div>
-        <span class="toast" id="seller-edit-toast-${order.id}"></span>
-      </div>
-    `;
+    primaryBtn = `<button class="btn btn-primary btn-small odc-primary-btn" data-save-edit="${order.id}">Save Changes</button>`;
+    secondaryBtns = `<button class="btn btn-ghost btn-small" data-cancel-edit="${order.id}">Cancel Edit</button>`;
+  }else if(order.status === 'pending'){
+    primaryBtn = `<button class="btn btn-primary btn-small odc-primary-btn" data-advance="${order.id}">Confirm Order</button>`;
+    secondaryBtns = `<button class="btn btn-deny btn-small" data-deny="${order.id}">Deny / Cancel</button>`;
+  }else if(order.status === 'delivered'){
+    primaryBtn = `<button class="btn btn-ghost btn-small odc-primary-btn" data-revert="${order.id}">Revert to Production</button>`;
+  }else if(order.status === 'denied'){
+    primaryBtn = `<button class="btn btn-ghost btn-small odc-primary-btn" data-restore="${order.id}">Restore to Pending</button>`;
   }else{
-    footRight = `
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        ${statusBtns}
-        <div class="dots-menu-wrap">
-          <button class="btn btn-ghost btn-small dots-btn" data-toggle-menu="${order.id}">⋮</button>
-          ${orderMenuOpen === order.id ? `
-            <div class="dots-menu">
-              <div class="dots-menu-item" data-edit-order="${order.id}">Edit Quantities</div>
-              ${(order.status === 'delivered' || order.status === 'denied') ? `<div class="dots-menu-item danger" data-delete="${order.id}">Delete</div>` : ''}
-            </div>
-          ` : ''}
-        </div>
-      </div>
-    `;
+    primaryBtn = `<button class="btn btn-primary btn-small odc-primary-btn" data-advance="${order.id}">${NEXT_LABEL[order.status]}</button>`;
+    secondaryBtns = `<button class="btn btn-ghost btn-small" data-revert="${order.id}">Back</button>`;
   }
 
-  panel.innerHTML = `
-    <div class="ticket">
-      ${stampHtml}
-      <div class="ticket-head">
-        <div>
-          <div class="ticket-id">TICKET #${order.id.slice(-6).toUpperCase()}</div>
-          <div class="ticket-customer">${escapeHtml(order.customerName)}</div>
-          ${order.username ? `<div class="ticket-note">User: ${escapeHtml(order.username)}</div>` : ''}
-          ${order.contact ? `<div class="ticket-note">Discord: ${escapeHtml(order.contact)}</div>` : ''}
-          ${order.pickupLocation ? `<div class="ticket-note">Pickup: ${escapeHtml(order.pickupLocation)}</div>` : ''}
-          ${order.note ? `<div class="ticket-note">"${escapeHtml(order.note)}"</div>` : ''}
-          ${(order.sourcePlans && order.sourcePlans.length) ? `<div class="ticket-note">From ${order.sourcePlans.length} base${order.sourcePlans.length !== 1 ? 's' : ''}: ${order.sourcePlans.map(p => `<a href="${escapeAttr(p.url)}" target="_blank" rel="noopener" style="color:var(--accent);">${escapeHtml(p.planetId)}</a>`).join(', ')}</div>` : ''}
+  const menuHtml = isEditing ? '' : `
+    <div class="dots-menu-wrap">
+      <button class="btn btn-ghost btn-small dots-btn" data-toggle-menu="${order.id}">⋮</button>
+      ${orderMenuOpen === order.id ? `
+        <div class="dots-menu">
+          <div class="dots-menu-item" data-edit-order="${order.id}">Edit Quantities</div>
+          <div class="dots-menu-item" data-export-xit="${order.id}">Export XIT ACT (Transfer)</div>
+          ${(order.status === 'delivered' || order.status === 'denied') ? `<div class="dots-menu-item danger" data-delete="${order.id}">Delete</div>` : ''}
         </div>
-        <div style="text-align:right;">
-          <div class="ticket-date">${dateStr}</div>
-          <div style="margin-top:8px;"><span class="status-badge ${statusClass}">${STATUS_LABELS[order.status]}</span></div>
-          ${order.handledBy ? `<div class="ticket-date" style="margin-top:6px;">Handled by: ${escapeHtml(order.handledBy)}</div>` : ''}
+      ` : ''}
+    </div>
+  `;
+
+  const { percent } = calcOrderReadiness(order);
+  const pctRounded = Math.round(percent);
+
+  panel.innerHTML = `
+    <div class="ticket odc">
+      <div class="odc-header">
+        <div>
+          <div class="odc-id-row">
+            <span class="odc-id">#${order.id.slice(-6).toUpperCase()}</span>
+            <span class="odc-status-inline"><span class="dot ${order.status}"></span>${STATUS_LABELS[order.status].toUpperCase()}</span>
+          </div>
+          ${order.username ? `<div class="odc-username">${escapeHtml(order.username)}</div>` : ''}
+        </div>
+        <div class="odc-total" id="seller-edit-total-${order.id}">${money(order.total, cur)}</div>
+      </div>
+
+      <div class="odc-section">
+        <div class="odc-section-label">Customer / Pickup</div>
+        <div class="odc-two-col">
+          <div class="odc-value">${escapeHtml(order.customerName)}</div>
+          <div class="odc-value">${escapeHtml(order.pickupLocation || '—')}</div>
+        </div>
+        ${order.contact ? `<div class="odc-subtext">Discord: ${escapeHtml(order.contact)}</div>` : ''}
+      </div>
+
+      <div class="odc-section">
+        <div class="odc-section-label">Progress</div>
+        <div class="odc-progress-row">
+          <div class="progress-track"><div class="progress-fill" style="width:${pctRounded}%;"></div></div>
+          <span class="odc-progress-pct">${pctRounded}%</span>
         </div>
       </div>
-      ${progressBadgeHtml(order)}
+
       ${physicalsBarHtml(order)}
-      <div class="ticket-body">
+
+      <div class="odc-section">
+        <div class="odc-section-label">Materials</div>
         ${isEditing ? `
           <div class="edit-currency-pickup-row">
             <div>
@@ -248,31 +266,54 @@ function renderOrderDetail(){
             </div>
           </div>
         ` : ''}
-        <table>
-          <thead><tr><th>Material</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Subtotal</th><th class="num">Produced</th><th class="num">% Ready</th></tr></thead>
+        <table class="odc-table">
+          <thead><tr><th>Material</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Subtotal</th><th class="num">Produced</th><th class="num">Ready</th></tr></thead>
           <tbody>${itemsHtml}</tbody>
         </table>
         ${!isEditing ? `
-          <div class="comment-box">
-            <label>Production progress</label>
-            <div class="comment-actions">
-              <button class="btn btn-ghost btn-small" data-save-progress="${order.id}">Save Progress</button>
-              <span class="toast" id="progress-toast-${order.id}"></span>
-            </div>
+          <div class="comment-actions" style="margin-top:8px;">
+            <button class="btn btn-ghost btn-small" data-save-progress="${order.id}">Save Progress</button>
+            <span class="toast" id="progress-toast-${order.id}"></span>
           </div>
         ` : ''}
-        <div class="comment-box">
-          <label>Comment for buyer (visible on their status check)</label>
-          <textarea data-comment-input="${order.id}" placeholder="e.g. Backordered on rebar, ETA Friday.">${escapeHtml(order.sellerComment || '')}</textarea>
-          <div class="comment-actions">
-            <button class="btn btn-ghost btn-small" data-save-comment="${order.id}">Save Comment</button>
-            <span class="toast" id="comment-toast-${order.id}"></span>
+      </div>
+
+      ${(order.sourcePlans && order.sourcePlans.length) ? `
+        <div class="odc-section">
+          <div class="odc-section-label">Source Bases</div>
+          <div class="odc-pills">
+            ${order.sourcePlans.map(p => `<a class="odc-pill" href="${escapeAttr(p.url)}" target="_blank" rel="noopener">${escapeHtml(p.planetId)} ↗</a>`).join('')}
           </div>
         </div>
+      ` : ''}
+
+      ${order.note ? `
+        <div class="odc-section">
+          <div class="odc-section-label">Customer Note</div>
+          <div class="odc-note">"${escapeHtml(order.note)}"</div>
+        </div>
+      ` : ''}
+
+      <div class="odc-section">
+        <div class="odc-section-label">Reply to Customer</div>
+        <textarea data-comment-input="${order.id}" placeholder="e.g. Backordered on rebar, ETA Friday.">${escapeHtml(order.sellerComment || '')}</textarea>
+        <div class="comment-actions">
+          <button class="btn btn-ghost btn-small" data-save-comment="${order.id}">Save Comment</button>
+          <span class="toast" id="comment-toast-${order.id}"></span>
+        </div>
       </div>
-      <div class="ticket-foot">
-        <div class="ticket-total" id="seller-edit-total-${order.id}">${money(order.total, cur)}</div>
-        ${footRight}
+
+      <div class="odc-section">
+        <div class="odc-section-label">Activity</div>
+        ${latestActivityHtml(order)}
+      </div>
+
+      <div class="odc-actions">
+        ${primaryBtn}
+        <div class="odc-actions-secondary">
+          ${secondaryBtns}
+          ${menuHtml}
+        </div>
       </div>
     </div>
   `;
@@ -314,6 +355,9 @@ function renderOrderDetail(){
   });
   panel.querySelectorAll('[data-edit-order]').forEach(el => {
     el.addEventListener('click', () => { orderMenuOpen = false; toggleOrderEdit(el.dataset.editOrder); });
+  });
+  panel.querySelectorAll('[data-export-xit]').forEach(el => {
+    el.addEventListener('click', () => { orderMenuOpen = false; renderOrderDetail(); exportXitActTransfer(order); });
   });
   panel.querySelectorAll('[data-cancel-edit]').forEach(btn => {
     btn.addEventListener('click', () => toggleOrderEdit(null));
@@ -395,8 +439,7 @@ async function saveSellerOrderEdit(order){
   });
   if(newItems.length === 0){
     if(toast){
-      toast.style.color = 'var(--rust)';
-      toast.textContent = 'Order must have at least one item — deny/cancel it instead.';
+      setToastError(toast, 'Order must have at least one item — deny/cancel it instead.');
     }
     return;
   }
@@ -428,8 +471,7 @@ async function saveSellerOrderEdit(order){
   }catch(e){
     console.error('Seller order edit failed:', e);
     if(toast){
-      toast.style.color = 'var(--rust)';
-      toast.textContent = e.message || 'Could not save changes.';
+      setToastError(toast, e.message || 'Could not save changes.');
     }
   }
 }
@@ -447,8 +489,7 @@ async function setOrderStatus(id, status){
     console.error(e);
     const toast = document.getElementById('order-toast');
     if(toast){
-      toast.style.color = 'var(--rust)';
-      toast.textContent = e.message || 'Could not update this order.';
+      setToastError(toast, e.message || 'Could not update this order.');
     }
   }
 }
@@ -461,15 +502,12 @@ async function saveOrderComment(id, text){
     await callManageOrder('saveComment', { id, comment: text.trim() });
     order.sellerComment = text.trim();
     if(toast){
-      toast.style.color = 'var(--ok)';
-      toast.textContent = 'Saved.';
-      setTimeout(() => { if(toast) toast.textContent = ''; }, 2000);
+      setToastSuccess(toast, 'Saved.', 2000);
     }
   }catch(e){
     console.error(e);
     if(toast){
-      toast.style.color = 'var(--rust)';
-      toast.textContent = e.message || 'Could not save.';
+      setToastError(toast, e.message || 'Could not save.');
     }
   }
 }
@@ -494,9 +532,9 @@ function recalcProducedProgress(order, changedInput){
     const { percent } = calcOrderReadiness(order);
     const pctRounded = Math.round(percent);
     const fill = ticket.querySelector('.progress-fill');
-    const label = ticket.querySelector('.progress-label');
+    const label = ticket.querySelector('.odc-progress-pct');
     if(fill) fill.style.width = pctRounded + '%';
-    if(label) label.textContent = pctRounded + '% ready';
+    if(label) label.textContent = pctRounded + '%';
   }
 }
 
@@ -519,9 +557,7 @@ async function saveOrderProgress(order){
       order.items = result.items;
     }
     if(toast){
-      toast.style.color = 'var(--ok)';
-      toast.textContent = 'Saved.';
-      setTimeout(() => { if(toast) toast.textContent = ''; }, 2000);
+      setToastSuccess(toast, 'Saved.', 2000);
     }
     // Keep the list row's mini progress % in sync without a full refetch.
     const row = document.querySelector(`[data-select-order="${order.id}"]`);
@@ -533,8 +569,7 @@ async function saveOrderProgress(order){
   }catch(e){
     console.error('Save progress failed:', e);
     if(toast){
-      toast.style.color = 'var(--rust)';
-      toast.textContent = e.message || 'Could not save.';
+      setToastError(toast, e.message || 'Could not save.');
     }
   }
 }
@@ -567,4 +602,73 @@ async function deleteOrder(id){
   }catch(e){
     console.error(e);
   }
+}
+
+/* Exports a Refined PrUn "XIT ACT" action package — a JSON file that,
+   imported into that extension's XIT ACT buffer in-game, sets up a ready-
+   to-run in-game material transfer (MTRA) matching this order's items.
+   Origin/destination are deliberately left as "Configure on Execution" —
+   the extension's own sentinel for "let me pick this when I actually run
+   it" — since a web app has no way of knowing anyone's real in-game
+   storage IDs. Schema confirmed directly from refined-prun's own source
+   (UserData.ActionPackageData in src/store/user-data.types.d.ts), not
+   guessed — see the ACT.ts / MTRA_TRANSFER.ts action-step files, and the
+   'Configure on Execution' constant in shared-types.ts. */
+const XIT_ACT_CONFIGURE_ON_EXECUTION = 'Configure on Execution';
+
+function buildXitActTransferPackage(order){
+  const groupName = `Order ${order.id.slice(-6).toUpperCase()}`;
+  const materials = {};
+  order.items.forEach(it => {
+    materials[String(it.name).toUpperCase()] = it.qty;
+  });
+
+  // Real-world testing showed "Configure on Execution" for BOTH origin and
+  // destination doesn't actually work, even though it's technically valid
+  // per the extension's own validation logic — only destination should be
+  // left configurable. Origin needs to be your real saved storage name
+  // (Seller Settings), falling back to the sentinel only if you haven't
+  // set one yet.
+  const origin = xitActOrigin && xitActOrigin.trim() ? xitActOrigin.trim() : XIT_ACT_CONFIGURE_ON_EXECUTION;
+
+  return {
+    global: { name: `${order.customerName} ${order.id.slice(-6).toUpperCase()} Transfer` },
+    groups: [
+      {
+        materials,
+        name: groupName,
+        type: 'Manual'
+      }
+    ],
+    actions: [
+      {
+        group: groupName,
+        origin,
+        dest: XIT_ACT_CONFIGURE_ON_EXECUTION,
+        name: `Transfer materials for ${order.customerName}`,
+        type: 'MTRA'
+      }
+    ]
+  };
+}
+
+function exportXitActTransfer(order){
+  if(!xitActOrigin || !xitActOrigin.trim()){
+    console.warn('No XIT ACT origin storage set (Seller Settings) — the exported file will use the "Configure on Execution" placeholder for origin too, which real-world testing showed does not reliably import.');
+  }
+  const pkg = buildXitActTransferPackage(order);
+  // Compact, single line — matches exactly what refined-prun's own
+  // downloadJson() produces by default (no pretty-print). Pretty-printed,
+  // multi-line JSON pasted into their "Paste JSON" field (a single-line
+  // text input, not a textarea) can get mangled by the browser before it
+  // ever reaches JSON.parse — this avoids that entirely.
+  const jsonString = JSON.stringify(pkg);
+  const blob = new Blob([jsonString], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.download = `${order.customerName} ${order.id.slice(-6).toUpperCase()}-${Date.now()}.json`;
+  link.href = URL.createObjectURL(blob);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
 }

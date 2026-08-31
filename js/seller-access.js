@@ -96,6 +96,7 @@ async function applyLoggedInState(profile){
   await loadSiteNoteIntoEditor();
   await loadSiteTitleIntoEditor();
   await loadAccentColorIntoEditor();
+  await loadXitOriginIntoEditor();
   document.getElementById('orders-open-toggle').checked = ordersOpen;
   document.getElementById('orders-open-label').textContent = ordersOpen ? 'Currently accepting new orders' : 'New orders are currently closed';
 }
@@ -168,8 +169,7 @@ async function changeAdminUsername(){
   const toast = document.getElementById('password-toast');
   const val = input.value.trim();
   if(val.length < 3){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'Use at least 3 characters.';
+    setToastError(toast, 'Use at least 3 characters.');
     return;
   }
   try{
@@ -179,13 +179,11 @@ async function changeAdminUsername(){
     input.value = '';
     loadAdminAccountIntoEditor();
     applyRoleVisibility();
-    toast.style.color = 'var(--ok)';
-    toast.textContent = 'Admin username updated.';
+    setToastSuccess(toast, 'Admin username updated.');
     setTimeout(() => toast.textContent = '', 3000);
   }catch(e){
     console.error('Username save failed:', e);
-    toast.style.color = 'var(--rust)';
-    toast.textContent = e.message || 'Could not update username.';
+    setToastError(toast, e.message || 'Could not update username.');
   }
 }
 
@@ -196,26 +194,22 @@ async function changeAdminPassword(){
   const val = input.value.trim();
   const currentVal = currentInput.value;
   if(!currentVal){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'Enter your current password to confirm.';
+    setToastError(toast, 'Enter your current password to confirm.');
     return;
   }
   if(val.length < 4){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'Use at least 4 characters.';
+    setToastError(toast, 'Use at least 4 characters.');
     return;
   }
   try{
     await callManageAccount('changePassword', { id: authSession.userId, newPassword: val, currentPassword: currentVal });
     input.value = '';
     currentInput.value = '';
-    toast.style.color = 'var(--ok)';
-    toast.textContent = 'Admin password updated.';
+    setToastSuccess(toast, 'Admin password updated.');
     setTimeout(() => toast.textContent = '', 2500);
   }catch(e){
     console.error('Password save failed:', e);
-    toast.style.color = 'var(--rust)';
-    toast.textContent = e.message || 'Could not update password.';
+    setToastError(toast, e.message || 'Could not update password.');
   }
 }
 
@@ -311,8 +305,7 @@ async function addEmployeeClick(){
   const name = nameInput.value.trim();
   const password = passwordInput.value.trim();
   if(!name || password.length < 4){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'Enter a name and a password of at least 4 characters.';
+    setToastError(toast, 'Enter a name and a password of at least 4 characters.');
     return;
   }
   try{
@@ -321,12 +314,10 @@ async function addEmployeeClick(){
     passwordInput.value = '';
     await loadAccountsList();
     renderEmployeesList();
-    toast.style.color = 'var(--ok)';
-    toast.textContent = 'Employee added.';
+    setToastSuccess(toast, 'Employee added.');
     setTimeout(() => toast.textContent = '', 2500);
   }catch(e){
     console.error('Add employee failed:', e);
-    toast.style.color = 'var(--rust)';
-    toast.textContent = e.message || 'Could not add employee.';
+    setToastError(toast, e.message || 'Could not add employee.');
   }
 }

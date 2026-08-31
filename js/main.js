@@ -42,6 +42,7 @@ async function init(){
   renderCurrencyOptionsEditor();
   populateBuyerSelects();
   defaultCxExchange = await loadDefaultCxExchange();
+  xitActOrigin = await loadXitActOrigin();
   renderCxExchangeSelector();
   loadDraftOrder();
   await checkAdminExists();
@@ -110,6 +111,7 @@ async function init(){
   document.getElementById('save-site-note-btn').addEventListener('click', saveSiteNoteClick);
   document.getElementById('save-site-title-btn').addEventListener('click', saveSiteTitleClick);
   document.getElementById('save-accent-color-btn').addEventListener('click', saveAccentColorClick);
+  document.getElementById('save-xit-origin-btn').addEventListener('click', saveXitOriginClick);
   document.getElementById('reset-accent-color-btn').addEventListener('click', resetAccentColorClick);
   document.getElementById('orders-open-toggle').addEventListener('change', onOrdersOpenToggle);
   document.getElementById('load-demo-btn').addEventListener('click', loadDemoData);

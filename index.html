@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lotol Materials Co.</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
 <script>
   // Applied before the stylesheet paints anything, so there's no flash of
   // the wrong theme on load. Kept tiny and inline on purpose — everything
@@ -359,7 +360,7 @@
             <div id="materials-manager"></div>
             <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;" id="materials-edit-actions">
               <button class="btn btn-secondary btn-small" id="add-material-btn" style="display:none;">+ Add Material</button>
-              <button class="btn btn-ghost btn-small" id="update-fio-weights-btn">Update Weight/Volume from FIO</button>
+              <button class="btn btn-ghost btn-small" id="update-fio-weights-btn">Update Weight/Volume/Category from FIO</button>
               <button class="btn btn-ghost btn-small" id="update-cx-prices-btn">Update CX Prices</button>
               <span class="toast" id="materials-toast"></span>
             </div>
@@ -386,6 +387,16 @@
             <button class="btn btn-secondary btn-small" id="save-accent-color-btn">Save Color</button>
             <button class="btn btn-ghost btn-small" id="reset-accent-color-btn">Reset to Default</button>
             <span class="toast" id="accent-color-toast"></span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>XIT ACT Default Origin</h2>
+          <div class="sub">Your exact in-game storage name (e.g. "Moria Station Warehouse"), used as the origin on every "Export XIT ACT (Transfer)" file. Testing showed the extension's "Configure on Execution" placeholder only works reliably for one side of a transfer — the destination stays configurable, but the origin needs your real storage name here.</div>
+          <input type="text" id="xit-act-origin-input" placeholder="e.g. Moria Station Warehouse">
+          <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
+            <button class="btn btn-secondary btn-small" id="save-xit-origin-btn">Save Origin</button>
+            <span class="toast" id="xit-origin-toast"></span>
           </div>
         </div>
 

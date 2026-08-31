@@ -50,7 +50,7 @@ function renderMaterialsManager(){
     const isChecked = materialsSelectedForCxUpdate.has(m.id);
     const tickerCell = materialsEditMode
       ? `<input type="text" value="${escapeAttr(m.name)}" data-id="${m.id}" data-field="name" ${isAdmin ? '' : 'disabled'}>`
-      : `<div class="mat-ticker-display">${escapeHtml(m.name)}</div>`;
+      : `<div class="mat-ticker-display">${materialTickerChip(m.name, m.category)}</div>`;
     row.innerHTML = `
       ${materialsEditMode ? `<div class="drag-handle" title="${isAdmin ? 'Drag to reorder' : ''}">${isAdmin ? '⠿' : ''}</div>` : ''}
       ${tickerCell}
@@ -176,47 +176,39 @@ async function autoSaveMaterialPricing(materialId){
     });
     renderOrderTable(); // keep the buyer-facing preview in sync with the new price
     if(toast){
-      toast.style.color = 'var(--ok)';
-      toast.textContent = 'Saved.';
-      setTimeout(() => { if(toast) toast.textContent = ''; }, 1500);
+      setToastSuccess(toast, 'Saved.', 1500);
     }
   }catch(e){
     console.error('Auto-save failed:', e);
     if(toast){
-      toast.style.color = 'var(--rust)';
-      toast.textContent = e.message || 'Could not save.';
+      setToastError(toast, e.message || 'Could not save.');
     }
   }
 }
 
 async function addMaterial(){
   if(sellerRole !== 'admin') return;
-  materials.push({ id: uid('m'), name: 'New Material', price: 0, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null });
+  materials.push({ id: uid('m'), name: 'New Material', price: 0, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null, category: null });
   renderMaterialsManager();
 }
 
 async function saveMaterialsClick(){
   const toast = document.getElementById('materials-toast');
-  if(sellerRole !== 'admin'){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'Only admins can save materials.';
-    return;
-  }
+  if(!requireAdmin(toast, 'Only admins can save materials.')) return;
   try{
     const payload = materials.map(m => ({
       id: m.id, name: m.name, price: m.price, weight: m.weight || 0, volume: m.volume || 0,
-      discountPercent: m.discountPercent || 0, showOnOrderList: m.showOnOrderList !== false, cxPrice: m.cxPrice
+      discountPercent: m.discountPercent || 0, showOnOrderList: m.showOnOrderList !== false, cxPrice: m.cxPrice,
+      category: m.category || null
     }));
     await callManageShopSettings('saveMaterials', { materials: payload, removedIds: removedMaterialIds });
     removedMaterialIds = [];
     renderOrderTable();
-    toast.style.color = 'var(--ok)';
-    toast.textContent = 'Saved.';
+    setToastSuccess(toast, 'Saved.');
     setTimeout(() => toast.textContent = '', 2000);
   }catch(e){
     console.error('Save materials failed:', e);
-    toast.style.color = 'var(--rust)';
-    toast.textContent = e.message || 'Could not save.';
+    setToastError(toast, e.message || 'Could not save.');
   }
 }
 
@@ -230,11 +222,7 @@ async function saveMaterialsClick(){
 async function updateWeightsFromFio(){
   const toast = document.getElementById('materials-toast');
   const btn = document.getElementById('update-fio-weights-btn');
-  if(sellerRole !== 'admin'){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'Only admins can do this.';
-    return;
-  }
+  if(!requireAdmin(toast, 'Only admins can do this.')) return;
   btn.disabled = true;
   const originalLabel = btn.textContent;
   btn.textContent = 'Fetching from FIO…';
@@ -250,34 +238,34 @@ async function updateWeightsFromFio(){
     materials.forEach(mat => {
       const needsWeight = !mat.weight;
       const needsVolume = !mat.volume;
-      if(!needsWeight && !needsVolume) return;
+      const needsCategory = !mat.category;
+      if(!needsWeight && !needsVolume && !needsCategory) return;
       const fioMat = fioMap.get(String(mat.name).toUpperCase());
       if(!fioMat) return;
       let touched = false;
       if(needsWeight && fioMat.Weight){ mat.weight = Number(fioMat.Weight); touched = true; }
       if(needsVolume && fioMat.Volume){ mat.volume = Number(fioMat.Volume); touched = true; }
+      if(needsCategory && fioMat.CategoryName){ mat.category = String(fioMat.CategoryName).toLowerCase(); touched = true; }
       if(touched){
         updatedCount++;
-        updates.push({ id: mat.id, weight: mat.weight, volume: mat.volume });
+        updates.push({ id: mat.id, weight: mat.weight, volume: mat.volume, category: mat.category });
       }
     });
 
     if(updatedCount === 0){
       toast.style.color = 'var(--ink-soft)';
-      toast.textContent = 'Nothing to update — every material already has a weight and volume, or none matched a FIO ticker.';
+      toast.textContent = 'Nothing to update — every material already has weight, volume, and category, or none matched a FIO ticker.';
       return;
     }
 
     await callManageShopSettings('updateMaterialPhysicals', { updates });
     renderMaterialsManager();
     renderOrderTable();
-    toast.style.color = 'var(--ok)';
-    toast.textContent = `Updated and saved ${updatedCount} material${updatedCount !== 1 ? 's' : ''} from FIO.`;
+    setToastSuccess(toast, `Updated and saved ${updatedCount} material${updatedCount !== 1 ? 's' : ''} from FIO.`);
     setTimeout(() => toast.textContent = '', 3500);
   }catch(e){
     console.error('FIO weight sync failed:', e);
-    toast.style.color = 'var(--rust)';
-    toast.textContent = e.message || 'Could not fetch from FIO — check the browser console for details.';
+    setToastError(toast, e.message || 'Could not fetch from FIO — check the browser console for details.');
   }finally{
     btn.disabled = false;
     btn.textContent = originalLabel;
@@ -327,11 +315,7 @@ function getCxPriceForTicker(parsed, ticker, exchange){
 async function updateCxPricesClick(){
   const toast = document.getElementById('materials-toast');
   const btn = document.getElementById('update-cx-prices-btn');
-  if(sellerRole !== 'admin'){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'Only admins can do this.';
-    return;
-  }
+  if(!requireAdmin(toast, 'Only admins can do this.')) return;
   const selectedIds = materials.filter(m => materialsSelectedForCxUpdate.has(m.id));
   if(selectedIds.length === 0){
     toast.style.color = 'var(--ink-soft)';
@@ -369,8 +353,7 @@ async function updateCxPricesClick(){
     setTimeout(() => toast.textContent = '', 4500);
   }catch(e){
     console.error('CX price sync failed:', e);
-    toast.style.color = 'var(--rust)';
-    toast.textContent = e.message || 'Could not fetch from FIO — check the browser console for details.';
+    setToastError(toast, e.message || 'Could not fetch from FIO — check the browser console for details.');
   }finally{
     btn.disabled = false;
     btn.textContent = originalLabel;
@@ -387,20 +370,17 @@ async function saveDefaultCxExchangeClick(){
   const toast = document.getElementById('cx-exchange-toast');
   const sel = document.getElementById('default-cx-exchange-select');
   if(sellerRole !== 'admin' && !permissions.settings){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'Only admins or employees with Settings access can change this.';
+    setToastError(toast, 'Only admins or employees with Settings access can change this.');
     return;
   }
   try{
     await saveDefaultCxExchange(sel.value);
     defaultCxExchange = sel.value;
-    toast.style.color = 'var(--ok)';
-    toast.textContent = 'Saved.';
+    setToastSuccess(toast, 'Saved.');
     setTimeout(() => toast.textContent = '', 2000);
   }catch(e){
     console.error('Save default CX exchange failed:', e);
-    toast.style.color = 'var(--rust)';
-    toast.textContent = e.message || 'Could not save.';
+    setToastError(toast, e.message || 'Could not save.');
   }
 }
 
@@ -445,16 +425,11 @@ async function saveOptionListClick(listType){
   const isPickup = listType === 'pickup';
   const toastId = isPickup ? 'pickup-options-toast' : 'currency-options-toast';
   const toast = document.getElementById(toastId);
-  if(sellerRole !== 'admin'){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'Only admins can save this.';
-    return;
-  }
+  if(!requireAdmin(toast, 'Only admins can save this.')) return;
   const list = isPickup ? pickupLocations : currencyOptions;
   const cleaned = [...new Set(list.map(v => v.trim()).filter(v => v.length > 0))];
   if(cleaned.length === 0){
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'The list needs at least one option.';
+    setToastError(toast, 'The list needs at least one option.');
     return;
   }
   try{
@@ -462,13 +437,11 @@ async function saveOptionListClick(listType){
     if(isPickup){ pickupLocations = cleaned; renderPickupOptionsEditor(); }
     else{ currencyOptions = cleaned; renderCurrencyOptionsEditor(); }
     populateBuyerSelects();
-    toast.style.color = 'var(--ok)';
-    toast.textContent = 'Saved.';
+    setToastSuccess(toast, 'Saved.');
     setTimeout(() => toast.textContent = '', 2000);
   }catch(e){
     console.error('Save option list failed:', e);
-    toast.style.color = 'var(--rust)';
-    toast.textContent = 'Could not save.';
+    setToastError(toast, 'Could not save.');
   }
 }
 
