@@ -5,38 +5,27 @@ let orderSortDirection = 'desc';
 let orderSearchTerm = '';
 let editingOrderId = null;
 
-async function ensureMaterialDemandLoaded(){
-  if(materialDemandCache) return;
-  materialDemandCache = await loadMaterialDemand();
+async function ensureMaterialQueueLoaded(){
+  if(materialQueueCache) return;
+  materialQueueCache = await loadMaterialQueue();
   renderOrderDetail();
 }
 
 /* Order isn't ready until every material in it is — the estimate is
    whichever material finishes last, not a sum across different materials
    (they're usually different production lines/recipes, not one combined
-   rate). totalDemand comes from the server: everyone currently in the
-   queue needing that material, not just this order — matching the whole
-   point of an "estimated wait" being queue-aware. */
+   rate). Each material's own demand is scoped to this order's position in
+   the queue (via estimateMaterialDays' uptoOrderId) — an order placed
+   earlier doesn't wait on orders placed behind it for the same material. */
 function estimateOrderReady(order){
-  if(!materialDemandCache) return null;
+  if(!materialQueueCache) return null;
   let maxDays = 0;
   let unknown = false;
   const perMaterial = order.items.map(it => {
-    const mat = materials.find(m => m.id === it.materialId);
-    const stockpile = mat ? (Number(mat.stockpile) || 0) : 0;
-    const rate = mat ? (Number(mat.productionPerDay) || 0) : 0;
-    const totalDemand = materialDemandCache[it.materialId] || 0;
-    const shortfall = Math.max(0, totalDemand - stockpile);
-    let days = 0;
-    if(shortfall > 0){
-      if(rate > 0){
-        days = shortfall / rate;
-        if(days > maxDays) maxDays = days;
-      }else{
-        unknown = true;
-      }
-    }
-    return { name: it.name, totalDemand, stockpile, rate, shortfall, days };
+    const est = estimateMaterialDays(it.materialId, order.id, 0);
+    if(est.days > maxDays) maxDays = est.days;
+    if(est.unknown) unknown = true;
+    return { name: it.name, ...est };
   });
   return { maxDays, unknown, perMaterial };
 }
@@ -238,7 +227,7 @@ function renderOrderDetail(){
   const dateStr = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   const cur = order.currency || 'NCC';
 
-  if(!demoMode) ensureMaterialDemandLoaded(); // fire-and-forget; guarded, cheap after the first call
+  if(!demoMode) ensureMaterialQueueLoaded(); // fire-and-forget; guarded, cheap after the first call
 
   let stampHtml = '';
   if(order.status === 'confirmed') stampHtml = '<div class="stamp">CONFIRMED</div>';
@@ -666,7 +655,7 @@ async function saveSellerOrderEdit(order){
     }
     editingOrderId = null;
     delete pendingNewOrderItems[order.id];
-    materialDemandCache = null; // quantities/materials changed — outstanding demand did too
+    materialQueueCache = null; // quantities/materials changed — outstanding demand did too
     renderOrdersList();
     updatePendingBadge();
   }catch(e){
@@ -684,7 +673,7 @@ async function setOrderStatus(id, status){
     await callManageOrder('setStatus', { id, newStatus: status });
     order.status = status;
     order.handledBy = sellerName;
-    materialDemandCache = null; // this order's status just changed — its contribution to the queue may have too
+    materialQueueCache = null; // this order's status just changed — its contribution to the queue may have too
     renderOrdersList();
     updatePendingBadge();
   }catch(e){
@@ -761,7 +750,7 @@ async function saveOrderProgress(order){
     if(toast){
       setToastSuccess(toast, 'Saved.', 2000);
     }
-    materialDemandCache = null; // producedQty changed — outstanding demand did too
+    materialQueueCache = null; // producedQty changed — outstanding demand did too
     // Keep the list row's mini progress % in sync without a full refetch.
     const row = document.querySelector(`[data-select-order="${order.id}"]`);
     if(row){

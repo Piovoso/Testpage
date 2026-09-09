@@ -76,24 +76,32 @@ function renderOrderTable(){
       <td class="num" id="sub-${m.id}">${money(0)}</td>
       <td class="num" id="weight-${m.id}">0.00</td>
       <td class="num" id="volume-${m.id}">0.00</td>
-      <td class="num" id="wait-${m.id}">${materialWaitCellHtml(m.id)}</td>
+      <td class="num" id="wait-${m.id}">${materialWaitCellHtml(m.id, 0)}</td>
     `;
     body.appendChild(tr);
   });
   body.querySelectorAll('.qty-input').forEach(inp => {
-    inp.addEventListener('input', () => { updateOrderTotals(); saveDraftOrder(); });
+    inp.addEventListener('input', () => {
+      updateOrderTotals();
+      saveDraftOrder();
+      const waitCell = document.getElementById(`wait-${inp.dataset.id}`);
+      if(waitCell) waitCell.innerHTML = materialWaitCellHtml(inp.dataset.id, Math.max(0, parseFloat(inp.value) || 0));
+    });
   });
   enhanceNumberInputsIn(body, 'input.qty-input', 'stacked');
   updateOrderTotals();
-  if(!demoMode) ensureBuyerMaterialDemandLoaded(); // fire-and-forget; guarded, cheap after the first call
+  if(!demoMode) ensureBuyerMaterialQueueLoaded(); // fire-and-forget; guarded, cheap after the first call
 }
 
 /* Compact "Est." cell for the order form — a plain number of days
    (materials.stockpile/productionPerDay are seller-entered, manual), a
    green "Ready" for anything already covered by stockpile, or a muted
-   dash while demand hasn't loaded yet or no rate is set to estimate from. */
-function materialWaitCellHtml(materialId){
-  const est = estimateMaterialDays(materialId);
+   dash while the queue hasn't loaded yet or no rate is set to estimate
+   from. currentQty is the buyer's own not-yet-submitted quantity for this
+   material — included on top of the existing queue, since placing this
+   order would add that much more demand, and updates live as they type. */
+function materialWaitCellHtml(materialId, currentQty){
+  const est = estimateMaterialDays(materialId, null, currentQty);
   if(!est) return '<span class="mat-wait-loading">—</span>';
   if(est.unknown) return '<span class="mat-wait-unknown">—</span>';
   if(est.days <= 0) return '<span class="mat-wait-ready">Ready</span>';
@@ -101,9 +109,9 @@ function materialWaitCellHtml(materialId){
   return `<span class="mat-wait-days">~${rounded}d</span>`;
 }
 
-async function ensureBuyerMaterialDemandLoaded(){
-  if(materialDemandCache) return;
-  materialDemandCache = await loadMaterialDemand();
+async function ensureBuyerMaterialQueueLoaded(){
+  if(materialQueueCache) return;
+  materialQueueCache = await loadMaterialQueue();
   renderOrderTable();
 }
 

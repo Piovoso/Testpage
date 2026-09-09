@@ -261,13 +261,13 @@ async function saveMaterialProduction(id, stockpile, productionPerDay){
   await callManageShopSettings('updateMaterialProduction', { id, stockpile, productionPerDay });
 }
 
-async function loadMaterialDemand(){
+async function loadMaterialQueue(){
   try{
-    const result = await callListOrders('materialDemand', {});
-    return result.demand || {};
+    const result = await callListOrders('materialQueue', {});
+    return result.queue || [];
   }catch(e){
-    console.error('Material demand load failed:', e);
-    return {};
+    console.error('Material queue load failed:', e);
+    return [];
   }
 }
 

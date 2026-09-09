@@ -224,21 +224,44 @@ const MATERIAL_CATEGORY_DEFAULT_COLOR = "#3d4a4d"; // neutral gray for anything 
    category-color convention from Refined PrUn. Falls back to a neutral
    gray chip if the material has no category set yet (e.g. added before
    an FIO sync, or FIO doesn't recognize the ticker). */
+/* Sums outstanding need for one material across the active-order queue —
+   everyone, if uptoOrderId is omitted (used for a not-yet-placed order,
+   which would join at the back of the line), or only orders at-or-before
+   a given order's own position (used for an order that's already placed,
+   so it doesn't count orders behind it in line). Returns null if the
+   queue hasn't loaded yet. */
+function cumulativeMaterialDemand(materialId, uptoOrderId){
+  if(!materialQueueCache) return null;
+  let sum = 0;
+  for(const o of materialQueueCache){
+    const item = o.items.find(it => it.materialId === materialId);
+    if(item) sum += item.remaining;
+    if(uptoOrderId && o.id === uptoOrderId) break;
+  }
+  return sum;
+}
+
 /* Per-material estimated wait, shared by the buyer's order form and the
-   seller's order detail card. Compares total outstanding demand across
-   every active order (materialDemandCache, loaded separately) against
-   that material's own stockpile and production rate — both seller-entered,
-   manually. Returns null if demand hasn't loaded yet. */
-function estimateMaterialDays(materialId){
-  if(!materialDemandCache) return null;
+   seller's order detail card. uptoOrderId scopes the queue to a specific
+   order's position (omit for a hypothetical new order); extraQty adds an
+   amount on top — e.g. the buyer's own not-yet-submitted quantity — before
+   comparing against that material's stockpile and production rate (both
+   seller-entered, manually). Returns null if the queue hasn't loaded yet. */
+function estimateMaterialDays(materialId, uptoOrderId, extraQty){
+  const cumulative = cumulativeMaterialDemand(materialId, uptoOrderId);
+  if(cumulative === null) return null;
+  const totalDemand = cumulative + (extraQty || 0);
   const mat = materials.find(m => m.id === materialId);
   const stockpile = mat ? (Number(mat.stockpile) || 0) : 0;
   const rate = mat ? (Number(mat.productionPerDay) || 0) : 0;
-  const totalDemand = materialDemandCache[materialId] || 0;
   const shortfall = Math.max(0, totalDemand - stockpile);
-  if(shortfall <= 0) return { days: 0, unknown: false };
-  if(rate <= 0) return { days: null, unknown: true };
-  return { days: shortfall / rate, unknown: false };
+  let days = 0;
+  let unknown = false;
+  if(shortfall > 0){
+    if(rate > 0) days = shortfall / rate;
+    else unknown = true;
+  }
+  return { totalDemand, stockpile, rate, shortfall, days, unknown };
 }
 
 function materialTickerChip(name, category){

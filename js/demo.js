@@ -41,14 +41,16 @@ function loadDemoData(){
   removedMaterialIds = [];
   materials = DEMO_MATERIALS.map(m => ({ ...m }));
   orders = buildDemoOrders();
-  materialDemandCache = {};
-  orders.forEach(o => {
-    if(!['pending', 'confirmed', 'production'].includes(o.status)) return;
-    o.items.forEach(it => {
-      const remaining = Math.max(0, it.qty - (it.producedQty || 0));
-      materialDemandCache[it.materialId] = (materialDemandCache[it.materialId] || 0) + remaining;
-    });
-  });
+  materialQueueCache = orders
+    .filter(o => ['pending', 'confirmed', 'production'].includes(o.status))
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    .map(o => ({
+      id: o.id,
+      items: o.items.map(it => ({
+        materialId: it.materialId,
+        remaining: Math.max(0, it.qty - (it.producedQty || 0))
+      }))
+    }));
   pickupLocations = ['Moria', 'Hortus', 'Benten'];
   currencyOptions = ['NCC', 'ICA', 'CIS', 'AIC'];
   renderOrderTable();
