@@ -2,6 +2,7 @@
 
 let materials = [];
 let orders = [];
+let materialDemandCache = null; // materialId -> total outstanding qty across all active orders; shared between buyer and seller views
 let removedMaterialIds = [];
 let isAuthenticated = false;
 let sellerRole = null; // 'admin' | 'employee'

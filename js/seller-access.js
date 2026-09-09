@@ -82,6 +82,7 @@ async function applyLoggedInState(profile){
         access: false
       };
 
+  resetInactivityTimer();
   renderGateState();
   applyRoleVisibility();
   renderOrdersList();
@@ -97,6 +98,8 @@ async function applyLoggedInState(profile){
   await loadSiteTitleIntoEditor();
   await loadAccentColorIntoEditor();
   await loadXitOriginIntoEditor();
+  await loadContractDaysIntoEditor();
+  await loadAutoLogoutIntoEditor();
   document.getElementById('orders-open-toggle').checked = ordersOpen;
   document.getElementById('orders-open-label').textContent = ordersOpen ? 'Currently accepting new orders' : 'New orders are currently closed';
 }
@@ -156,8 +159,79 @@ async function logout(){
   sellerName = '';
   accounts = [];
   permissions = { orders: true, statistics: true, materials: true, settings: true, access: false };
+  stopInactivityTracking();
   renderGateState();
 }
+
+/* Auto-logout on inactivity. autoLogoutMinutes (0 = disabled) is a seller
+   setting loaded at startup. A warning banner with a live countdown
+   appears 60 seconds before the actual logout, so nobody gets silently
+   kicked out mid-task — "Stay Logged In" just restarts the whole timer. */
+let autoLogoutMinutes = 20;
+let inactivityTimer = null;
+let inactivityWarningTimer = null;
+let inactivityCountdownInterval = null;
+let lastActivityResetAt = 0;
+const AUTO_LOGOUT_WARNING_SECONDS = 60;
+
+function resetInactivityTimer(){
+  clearTimeout(inactivityTimer);
+  clearTimeout(inactivityWarningTimer);
+  hideInactivityWarning();
+  if(!isAuthenticated || !autoLogoutMinutes) return;
+
+  const totalMs = autoLogoutMinutes * 60 * 1000;
+  const warnAfterMs = Math.max(0, totalMs - AUTO_LOGOUT_WARNING_SECONDS * 1000);
+  inactivityWarningTimer = setTimeout(showInactivityWarning, warnAfterMs);
+  inactivityTimer = setTimeout(() => { logout(); }, totalMs);
+}
+
+function showInactivityWarning(){
+  const banner = document.getElementById('auto-logout-warning');
+  if(!banner) return;
+  banner.style.display = 'flex';
+  let secondsLeft = AUTO_LOGOUT_WARNING_SECONDS;
+  const countEl = document.getElementById('auto-logout-countdown');
+  if(countEl) countEl.textContent = secondsLeft;
+  clearInterval(inactivityCountdownInterval);
+  inactivityCountdownInterval = setInterval(() => {
+    secondsLeft--;
+    if(countEl) countEl.textContent = Math.max(0, secondsLeft);
+    if(secondsLeft <= 0) clearInterval(inactivityCountdownInterval);
+  }, 1000);
+}
+
+function hideInactivityWarning(){
+  const banner = document.getElementById('auto-logout-warning');
+  if(banner) banner.style.display = 'none';
+  clearInterval(inactivityCountdownInterval);
+}
+
+function stayLoggedInClick(){
+  resetInactivityTimer();
+}
+
+function stopInactivityTracking(){
+  clearTimeout(inactivityTimer);
+  clearTimeout(inactivityWarningTimer);
+  clearInterval(inactivityCountdownInterval);
+  hideInactivityWarning();
+}
+
+/* Lightweight throttle — real activity (typing, clicking, scrolling) is
+   frequent enough that resetting two setTimeout calls on every single
+   mousemove would be wasteful. Once every 5s of continuous activity is
+   plenty to keep the session alive. */
+function onUserActivity(){
+  if(!isAuthenticated) return;
+  const now = Date.now();
+  if(now - lastActivityResetAt < 5000) return;
+  lastActivityResetAt = now;
+  resetInactivityTimer();
+}
+['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(evt => {
+  document.addEventListener(evt, onUserActivity, { passive: true });
+});
 
 function loadAdminAccountIntoEditor(){
   const nameInput = document.getElementById('new-admin-username-input');

@@ -14,6 +14,7 @@
     --ok-dim: rgba(63,207,142,0.14);
     --accent: #3fcdb8;
     --accent-dim: rgba(63,205,184,0.14);
+    --overlay-bg: rgba(20,27,30,0.85);
     --mono: 'IBM Plex Mono', 'Courier New', monospace;
     --sans: 'IBM Plex Mono', 'Courier New', monospace;
   }
@@ -33,6 +34,7 @@
     --ok-dim: rgba(25,125,81,0.10);
     --accent: #128472;
     --accent-dim: rgba(18,132,114,0.10);
+    --overlay-bg: rgba(244,247,247,0.85);
   }
   *{box-sizing:border-box;}
   body{
@@ -163,6 +165,7 @@
   table.order-table th:nth-child(4), table.order-table td:nth-child(4){ width: 120px; }
   table.order-table th:nth-child(5), table.order-table td:nth-child(5){ width: 80px; }
   table.order-table th:nth-child(6), table.order-table td:nth-child(6){ width: 80px; }
+  table.order-table th:nth-child(7), table.order-table td:nth-child(7){ width: 75px; }
   table.order-table thead th{
     text-align: left;
     font-family: var(--mono);
@@ -203,6 +206,9 @@
   }
   table.order-table input[type="number"]:focus{ outline: 2px solid var(--accent); outline-offset: 1px; }
   .mat-name{ font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mat-wait-ready{ color: var(--ok); font-size: 12px; font-weight: 600; }
+  .mat-wait-days{ color: var(--ink); font-size: 12px; }
+  .mat-wait-unknown, .mat-wait-loading{ color: var(--ink-soft); font-size: 12px; }
 
   table.order-table tfoot td{
     border-top: 3px solid var(--accent);
@@ -312,13 +318,13 @@
 
   .mat-manager-row{
     display:grid;
-    grid-template-columns: 1.3fr 0.7fr 1.5fr 1.6fr 1.1fr 0.9fr 0.9fr 1fr;
+    grid-template-columns: 1.3fr 0.7fr 1.5fr 1.6fr 1.1fr 0.9fr 0.9fr 1fr 0.9fr 0.9fr;
     gap: 10px;
     margin-bottom: 8px;
     align-items:center;
   }
   #materials-manager.edit-mode .mat-manager-row{
-    grid-template-columns: 28px 1.3fr 0.7fr 1.5fr 1.6fr 1.1fr 0.9fr 0.9fr 1fr 36px;
+    grid-template-columns: 28px 1.3fr 0.7fr 1.5fr 1.6fr 1.1fr 0.9fr 0.9fr 1fr 0.9fr 0.9fr 36px;
   }
   .mat-ticker-display{
     font-family: var(--mono);
@@ -578,6 +584,7 @@
     border: none !important;
     background: transparent !important;
     padding-right: 10px !important;
+    width: 64px;
   }
   .stepper-stacked input::-webkit-outer-spin-button,
   .stepper-stacked input::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
@@ -613,6 +620,7 @@
     border-right: 1px solid var(--line) !important;
     border-radius: 0 !important;
     text-align: center !important;
+    width: 50px;
   }
   .stepper-flanking input::-webkit-outer-spin-button,
   .stepper-flanking input::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
@@ -634,12 +642,14 @@
     display:flex; flex-direction: column; align-items:center; justify-content:flex-start;
     padding-top: 36px;
     gap: 12px;
-    background: rgba(20,27,30,0.85);
+    background: var(--overlay-bg);
     border-radius: 4px;
     z-index: 2;
   }
   .spinner{
     width: 28px; height: 28px;
+    aspect-ratio: 1 / 1;
+    flex-shrink: 0;
     border: 3px solid var(--line);
     border-top-color: var(--accent);
     border-radius: 50%;
@@ -997,6 +1007,37 @@
   table.odc-table td{ padding: 6px; border-bottom: 1px dashed var(--line); }
   table.odc-table tr:last-child td{ border-bottom: none; }
 
+  .odc-pending-row{ background: var(--accent-dim); }
+  .odc-pending-tag{
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 2px;
+    padding: 1px 5px;
+    margin-left: 4px;
+  }
+  .odc-add-material-row{
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .odc-add-material-select{
+    font-family: var(--mono);
+    font-size: 12.5px;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+    flex: 1;
+    min-width: 140px;
+  }
+
   .odc-pills{ display:flex; flex-wrap: wrap; gap: 8px; }
   .odc-pill{
     display:inline-block;
@@ -1010,6 +1051,13 @@
   }
   .odc-pill:hover{ border-color: var(--accent); color: var(--accent); }
 
+  .comment-actions{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
   .odc-note{
     font-size: 13px;
     font-style: italic;
@@ -1021,6 +1069,15 @@
   }
 
   .odc-latest-activity{ display:flex; align-items:center; font-size: 13px; color: var(--ink); }
+
+  .odc-estimate-headline{ font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+  .odc-estimate-ready{ color: var(--ok); }
+  .odc-estimate-days{ color: var(--ink); }
+  .odc-estimate-unknown{ color: var(--ink-soft); font-weight: 400; font-size: 12.5px; }
+  .odc-estimate-loading{ color: var(--ink-soft); font-weight: 400; }
+  table.odc-estimate-table{ font-size: 12px; }
+  table.odc-estimate-table th{ font-size: 9.5px; }
+  .odc-estimate-note{ font-size: 11px; color: var(--ink-soft); margin-top: 8px; line-height: 1.4; }
   .odc-latest-activity .dot{ width:7px; height:7px; }
   .odc-activity-time{ color: var(--ink-soft); margin-left: 6px; font-size: 12px; }
 
@@ -1067,6 +1124,176 @@
     gap: 16px;
     align-items:start;
   }
+  /* Flat settings list ("Option B") — no boxed panels, no per-field
+     accordions. Section names are the only dividers; every field is a
+     plain row, description always visible. */
+  .settings-flat{ max-width: 720px; }
+  .settings-flat-head{
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    padding-bottom: 6px;
+    margin: 28px 0 4px;
+    border-bottom: 2px solid var(--accent);
+  }
+  .settings-flat-head:first-child{ margin-top: 0; }
+  .settings-flat-row{
+    padding: 14px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .settings-flat-row:last-of-type{ border-bottom: none; }
+  .settings-flat-info{ margin-bottom: 10px; }
+  .settings-flat-label{
+    display:block;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 3px;
+  }
+  .settings-flat-desc{
+    display:block;
+    font-size: 12px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+  .settings-flat-controls{
+    display:flex;
+    align-items:center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .settings-flat-controls input[type="text"],
+  .settings-flat-controls input[type="number"]{
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    min-width: 200px;
+  }
+  .settings-flat-controls-stack{ flex-direction: column; align-items: stretch; }
+  .settings-flat-controls-stack textarea{
+    width: 100%;
+    min-height: 70px;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    resize: vertical;
+  }
+
+  /* Click-to-expand panel descriptions ("Option B") — a caret next to the
+     title that expands a short description below on click, not hover.
+     Works on touch devices and stays open while you actually read it.
+     (Still used on Statistics/Materials/Access — Settings itself no
+     longer uses this, see .settings-flat-* above.) */
+  .acc-title-row{ display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none; }
+  .acc-title-row h2{ margin:0; }
+  .acc-caret{
+    font-size:9px; color: var(--ink-soft);
+    display:inline-block;
+    transition: transform .15s ease, color .15s ease;
+    flex-shrink:0;
+  }
+  .acc-caret.open{ transform: rotate(90deg); color: var(--accent); }
+  .acc-desc{
+    font-size:12px; color: var(--ink-soft); line-height:1.5;
+    max-height:0; overflow:hidden;
+    transition: max-height .18s ease, margin-top .18s ease;
+    margin-top:0;
+  }
+  .acc-desc.open{ max-height:200px; margin-top:8px; }
+
+  .settings-section{ margin-bottom: 32px; }
+  #settings-xit{
+    background: var(--paper-dim);
+    border: 1px solid var(--ok);
+    border-left-width: 3px;
+    border-radius: 4px;
+    padding: 18px 18px 4px;
+  }
+  #settings-xit .panel{ background: var(--paper); }
+
+  #auto-logout-warning{
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index: 200;
+  }
+  .auto-logout-box{
+    background: var(--paper-dim);
+    border: 1px solid var(--rust);
+    border-radius: 6px;
+    padding: 24px 28px;
+    text-align:center;
+    max-width: 320px;
+  }
+  .auto-logout-title{ font-size: 16px; font-weight:700; margin-bottom: 8px; }
+  .auto-logout-text{ font-size: 12.5px; color: var(--ink-soft); margin-bottom: 16px; line-height:1.5; }
+  .auto-logout-text #auto-logout-countdown{ color: var(--rust); font-weight:700; }
+  .settings-section-title{ display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .settings-section-title h2{ margin:0; font-size:16px; }
+  .settings-section-desc{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
+  .settings-badge{
+    width:30px; height:30px; border-radius:5px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; flex-shrink:0;
+  }
+  .settings-badge-branding{ background: var(--steel-dim); color: var(--steel); }
+  .settings-badge-storefront{ background: var(--accent-dim); color: var(--accent); }
+  .settings-badge-xit{ background: var(--ok-dim); color: var(--ok); }
+  .settings-badge-security{ background: var(--rust-dim); color: var(--rust); }
+
+  .settings-2col{ display:grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 600px){ .settings-2col{ grid-template-columns: 1fr; } }
+
+  .xit-settings-columns{ display:grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 600px){ .xit-settings-columns{ grid-template-columns: 1fr; } }
+  .xit-col-header{ display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+  .xit-col-header h2{ margin:0; font-size:14px; }
+  .xit-col-icon{
+    width:24px; height:24px; border-radius:4px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px; flex-shrink:0;
+  }
+  .xit-col-icon-transfer{ background: var(--steel-dim); color: var(--steel); }
+  .xit-col-icon-contract{ background: var(--ok-dim); color: var(--ok); }
+
+  /* Hover-to-reveal info tooltip, replacing the always-visible description
+     text under most seller panel titles. Dynamic status/warning text
+     (search results summary, employee-permission notices) stays visible
+     as regular text — this is only for static "what does this do" copy. */
+  .info-icon-wrap{ position:relative; display:inline-flex; align-items:center; margin-left:7px; vertical-align:middle; }
+  .info-icon{
+    width:15px; height:15px; border-radius:50%;
+    background: var(--paper); border:1px solid var(--line); color: var(--ink-soft);
+    font-size:10px; font-style:italic; font-family:Georgia, serif;
+    display:flex; align-items:center; justify-content:center;
+    cursor:help; user-select:none;
+  }
+  .info-icon-wrap:hover .info-icon{ border-color: var(--accent); color: var(--accent); }
+  .info-tooltip{
+    visibility:hidden; opacity:0;
+    position:absolute; bottom:calc(100% + 8px); left:0;
+    background: var(--paper-deep); border:1px solid var(--line); border-radius:4px;
+    padding:9px 11px; font-size:11.5px; line-height:1.45;
+    width:250px; max-width:60vw;
+    transition: opacity .12s ease;
+    z-index:30;
+    font-weight:400; text-transform:none; letter-spacing:normal;
+    color: var(--ink);
+  }
+  .info-icon-wrap:hover .info-tooltip{ visibility:visible; opacity:1; }
+
   .materials-side-col{ display:flex; flex-direction:column; gap: 16px; min-width: 0; }
   .materials-side-col .panel{ margin-bottom: 0; }
   .materials-main-col{ min-width: 0; }

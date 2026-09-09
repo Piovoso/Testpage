@@ -39,6 +39,8 @@ function renderMaterialsManager(){
     <div>Weight</div>
     <div>Volume</div>
     <div title="Visible to buyers on the order form">Show on List</div>
+    <div title="Manually entered — how much you currently have on hand">Stockpile</div>
+    <div title="Manually entered — units produced per day, used for estimated-ready calculations">Prod/Day</div>
   `;
   wrap.appendChild(header);
 
@@ -61,6 +63,8 @@ function renderMaterialsManager(){
       <div class="cx-price-display">${(m.weight || 0).toFixed(2)}</div>
       <div class="cx-price-display">${(m.volume || 0).toFixed(2)}</div>
       <input type="checkbox" data-id="${m.id}" data-field="showOnOrderList" ${m.showOnOrderList !== false ? 'checked' : ''} ${isAdmin ? '' : 'disabled'}>
+      <input type="number" class="price" step="1" min="0" value="${m.stockpile || 0}" data-id="${m.id}" data-field="stockpile" ${isAdmin ? '' : 'disabled'}>
+      <input type="number" class="price" step="0.1" min="0" value="${m.productionPerDay || 0}" data-id="${m.id}" data-field="productionPerDay" ${isAdmin ? '' : 'disabled'}>
       ${materialsEditMode ? `<button class="icon-btn" data-remove="${m.id}" title="Remove" ${isAdmin ? '' : 'disabled'}>✕</button>` : ''}
     `;
     wrap.appendChild(row);
@@ -73,8 +77,14 @@ function renderMaterialsManager(){
       const mat = materials.find(m => m.id === id);
       if(!mat) return;
       mat[field] = (field === 'name') ? e.target.value : (parseFloat(e.target.value) || 0);
-      if(field === 'discountPercent' || field === 'price'){
+      // Discount % still auto-saves. Price is deliberately manual now — a
+      // typo mid-edit shouldn't silently push a wrong price live; it only
+      // takes effect once "Save Prices" is actually clicked.
+      if(field === 'discountPercent'){
         scheduleAutoSavePricing(id);
+      }
+      if(field === 'stockpile' || field === 'productionPerDay'){
+        scheduleAutoSaveProduction(id);
       }
     });
   });
@@ -186,10 +196,62 @@ async function autoSaveMaterialPricing(materialId){
   }
 }
 
+const productionAutoSaveTimers = {};
+function scheduleAutoSaveProduction(materialId){
+  if(productionAutoSaveTimers[materialId]) clearTimeout(productionAutoSaveTimers[materialId]);
+  productionAutoSaveTimers[materialId] = setTimeout(() => autoSaveMaterialProduction(materialId), 700);
+}
+
+async function autoSaveMaterialProduction(materialId){
+  const mat = materials.find(m => m.id === materialId);
+  if(!mat || sellerRole !== 'admin') return;
+  const toast = document.getElementById('materials-toast');
+  try{
+    await saveMaterialProduction(mat.id, mat.stockpile || 0, mat.productionPerDay || 0);
+    if(toast){
+      setToastSuccess(toast, 'Saved.', 1500);
+    }
+  }catch(e){
+    console.error('Production auto-save failed:', e);
+    if(toast){
+      setToastError(toast, e.message || 'Could not save.');
+    }
+  }
+}
+
 async function addMaterial(){
   if(sellerRole !== 'admin') return;
-  materials.push({ id: uid('m'), name: 'New Material', price: 0, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null, category: null });
+  materials.push({ id: uid('m'), name: 'New Material', price: 0, weight: 0, volume: 0, discountPercent: 0, showOnOrderList: true, cxPrice: null, category: null, stockpile: 0, productionPerDay: 0 });
   renderMaterialsManager();
+}
+
+/* Price no longer auto-saves — this is the explicit "commit what's
+   currently typed" action. Loops the same narrow updateMaterialPricing
+   action auto-save already uses (never touches name/weight/volume/
+   category/order), just triggered manually for every material at once
+   instead of debounced per-field. */
+async function savePricesClick(){
+  const toast = document.getElementById('materials-toast');
+  if(!requireAdmin(toast, 'Only admins can save prices.')) return;
+  const btn = document.getElementById('save-prices-btn');
+  btn.disabled = true;
+  try{
+    for(const mat of materials){
+      await callManageShopSettings('updateMaterialPricing', {
+        id: mat.id,
+        discountPercent: mat.discountPercent || 0,
+        price: mat.price,
+        showOnOrderList: mat.showOnOrderList !== false
+      });
+    }
+    renderOrderTable();
+    setToastSuccess(toast, 'Prices saved.', 2000);
+  }catch(e){
+    console.error('Save prices failed:', e);
+    setToastError(toast, e.message || 'Could not save.');
+  }finally{
+    btn.disabled = false;
+  }
 }
 
 async function saveMaterialsClick(){
@@ -221,11 +283,10 @@ async function saveMaterialsClick(){
    Save Changes. */
 async function updateWeightsFromFio(){
   const toast = document.getElementById('materials-toast');
-  const btn = document.getElementById('update-fio-weights-btn');
+  document.getElementById('materials-tools-menu').style.display = 'none';
   if(!requireAdmin(toast, 'Only admins can do this.')) return;
-  btn.disabled = true;
-  const originalLabel = btn.textContent;
-  btn.textContent = 'Fetching from FIO…';
+  toast.style.color = 'var(--ink-soft)';
+  toast.textContent = 'Fetching from FIO…';
   try{
     const res = await fetch('https://rest.fnar.net/material/allmaterials');
     if(!res.ok) throw new Error(`FIO request failed (${res.status}).`);
@@ -266,9 +327,6 @@ async function updateWeightsFromFio(){
   }catch(e){
     console.error('FIO weight sync failed:', e);
     setToastError(toast, e.message || 'Could not fetch from FIO — check the browser console for details.');
-  }finally{
-    btn.disabled = false;
-    btn.textContent = originalLabel;
   }
 }
 
@@ -314,7 +372,7 @@ function getCxPriceForTicker(parsed, ticker, exchange){
    Saves straight to the database once done. */
 async function updateCxPricesClick(){
   const toast = document.getElementById('materials-toast');
-  const btn = document.getElementById('update-cx-prices-btn');
+  document.getElementById('materials-tools-menu').style.display = 'none';
   if(!requireAdmin(toast, 'Only admins can do this.')) return;
   const selectedIds = materials.filter(m => materialsSelectedForCxUpdate.has(m.id));
   if(selectedIds.length === 0){
@@ -323,9 +381,8 @@ async function updateCxPricesClick(){
     return;
   }
 
-  btn.disabled = true;
-  const originalLabel = btn.textContent;
-  btn.textContent = 'Fetching from FIO…';
+  toast.style.color = 'var(--ink-soft)';
+  toast.textContent = 'Fetching from FIO…';
   try{
     const res = await fetch('https://rest.fnar.net/csv/prices');
     if(!res.ok) throw new Error(`FIO request failed (${res.status}).`);
@@ -354,9 +411,6 @@ async function updateCxPricesClick(){
   }catch(e){
     console.error('CX price sync failed:', e);
     setToastError(toast, e.message || 'Could not fetch from FIO — check the browser console for details.');
-  }finally{
-    btn.disabled = false;
-    btn.textContent = originalLabel;
   }
 }
 

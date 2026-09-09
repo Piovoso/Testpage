@@ -4,6 +4,98 @@ let orderStatusFilter = 'pending';
 let orderSortDirection = 'desc';
 let orderSearchTerm = '';
 let editingOrderId = null;
+
+async function ensureMaterialDemandLoaded(){
+  if(materialDemandCache) return;
+  materialDemandCache = await loadMaterialDemand();
+  renderOrderDetail();
+}
+
+/* Order isn't ready until every material in it is — the estimate is
+   whichever material finishes last, not a sum across different materials
+   (they're usually different production lines/recipes, not one combined
+   rate). totalDemand comes from the server: everyone currently in the
+   queue needing that material, not just this order — matching the whole
+   point of an "estimated wait" being queue-aware. */
+function estimateOrderReady(order){
+  if(!materialDemandCache) return null;
+  let maxDays = 0;
+  let unknown = false;
+  const perMaterial = order.items.map(it => {
+    const mat = materials.find(m => m.id === it.materialId);
+    const stockpile = mat ? (Number(mat.stockpile) || 0) : 0;
+    const rate = mat ? (Number(mat.productionPerDay) || 0) : 0;
+    const totalDemand = materialDemandCache[it.materialId] || 0;
+    const shortfall = Math.max(0, totalDemand - stockpile);
+    let days = 0;
+    if(shortfall > 0){
+      if(rate > 0){
+        days = shortfall / rate;
+        if(days > maxDays) maxDays = days;
+      }else{
+        unknown = true;
+      }
+    }
+    return { name: it.name, totalDemand, stockpile, rate, shortfall, days };
+  });
+  return { maxDays, unknown, perMaterial };
+}
+
+/* Renders the section built on estimateOrderReady() above. Shown for any
+   active order (not delivered/denied), hidden while editing quantities
+   since the numbers would be mid-change and misleading. */
+function estimatedReadyHtml(order){
+  const est = estimateOrderReady(order);
+  if(!est){
+    return `
+      <div class="odc-section">
+        <div class="odc-section-label">Estimated Ready</div>
+        <div class="odc-estimate-headline odc-estimate-loading">Loading…</div>
+      </div>
+    `;
+  }
+  const { maxDays, unknown, perMaterial } = est;
+
+  let headline;
+  if(unknown){
+    headline = `<span class="odc-estimate-unknown">Unknown — set a production rate for at least one material below to estimate this.</span>`;
+  }else if(maxDays <= 0){
+    headline = `<span class="odc-estimate-ready">Ready now — stockpile covers the current queue.</span>`;
+  }else{
+    const rounded = Math.ceil(maxDays * 10) / 10;
+    headline = `<span class="odc-estimate-days">~${rounded} day${rounded !== 1 ? 's' : ''}</span>`;
+  }
+
+  const rows = perMaterial.map(pm => {
+    let estText;
+    if(pm.shortfall <= 0) estText = 'covered';
+    else if(pm.rate <= 0) estText = 'no rate set';
+    else estText = `~${Math.ceil(pm.days * 10) / 10}d`;
+    return `
+      <tr>
+        <td>${escapeHtml(pm.name)}</td>
+        <td class="num">${pm.totalDemand}</td>
+        <td class="num">${pm.stockpile}</td>
+        <td class="num">${pm.rate || '—'}</td>
+        <td class="num">${estText}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div class="odc-section">
+      <div class="odc-section-label">Estimated Ready</div>
+      <div class="odc-estimate-headline">${headline}</div>
+      <table class="odc-table odc-estimate-table">
+        <thead><tr><th>Material</th><th class="num">Queue Needs</th><th class="num">Stockpile</th><th class="num">Rate/Day</th><th class="num">Est.</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="odc-estimate-note">"Queue Needs" is the total outstanding amount across every active order, not just this one — matches what's actually ahead of it.</div>
+    </div>
+  `;
+}
+
+
 let selectedOrderId = null;
 let orderMenuOpen = false;
 let ordersPageSize = 10;
@@ -99,6 +191,7 @@ async function renderOrdersList(){
     list.querySelectorAll('[data-select-order]').forEach(row => {
       row.addEventListener('click', () => {
         if(row.dataset.selectOrder === selectedOrderId) return;
+        if(editingOrderId) delete pendingNewOrderItems[editingOrderId];
         selectedOrderId = row.dataset.selectOrder;
         editingOrderId = null;
         orderMenuOpen = false;
@@ -145,6 +238,8 @@ function renderOrderDetail(){
   const dateStr = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   const cur = order.currency || 'NCC';
 
+  if(!demoMode) ensureMaterialDemandLoaded(); // fire-and-forget; guarded, cheap after the first call
+
   let stampHtml = '';
   if(order.status === 'confirmed') stampHtml = '<div class="stamp">CONFIRMED</div>';
   if(order.status === 'production') stampHtml = '<div class="stamp stamp-production">IN PRODUCTION</div>';
@@ -165,6 +260,7 @@ function renderOrderDetail(){
   }
 
   const isEditing = order.id === editingOrderId;
+  const pendingNew = pendingNewOrderItems[order.id] || [];
   const itemsHtml = isEditing
     ? order.items.map(it => {
         const produced = Math.max(0, Math.min(it.qty, Number(it.producedQty) || 0));
@@ -180,8 +276,37 @@ function renderOrderDetail(){
           <td class="num">${pct}%</td>
         </tr>
       `;
+      }).join('') + pendingNew.map(it => {
+        const mat = materials.find(m => m.id === it.materialId);
+        return `
+        <tr class="odc-pending-row">
+          <td>${materialTickerChip(it.name, mat ? mat.category : null)} <span class="odc-pending-tag">new</span></td>
+          <td class="num"><input type="number" min="0" step="1" value="${it.qty}" data-seller-qty="${order.id}:${it.materialId}" class="qty-input"></td>
+          <td class="num">${money(it.price, cur)}</td>
+          <td class="num" id="seller-sub-${order.id}-${it.materialId}">${money(it.qty * it.price, cur)}</td>
+          <td class="num">0</td>
+          <td class="num">
+            <button class="icon-btn" data-remove-pending="${order.id}:${it.materialId}" title="Remove">✕</button>
+          </td>
+        </tr>
+      `;
       }).join('')
     : ticketRowsHtml(order, true);
+
+  const addMaterialRowHtml = isEditing ? (() => {
+    const usedIds = new Set([...order.items.map(i => i.materialId), ...pendingNew.map(i => i.materialId)]);
+    const available = materials.filter(m => !usedIds.has(m.id));
+    if(available.length === 0) return '';
+    return `
+      <div class="odc-add-material-row">
+        <select id="add-material-select-${order.id}" class="odc-add-material-select">
+          ${available.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('')}
+        </select>
+        <input type="number" min="1" step="1" value="1" id="add-material-qty-${order.id}" class="qty-input" style="width:70px;">
+        <button class="btn btn-ghost btn-small" data-add-material="${order.id}">+ Add Material</button>
+      </div>
+    `;
+  })() : '';
 
   let primaryBtn = '';
   let secondaryBtns = '';
@@ -206,7 +331,8 @@ function renderOrderDetail(){
       ${orderMenuOpen === order.id ? `
         <div class="dots-menu">
           <div class="dots-menu-item" data-edit-order="${order.id}">Edit Quantities</div>
-          <div class="dots-menu-item" data-export-xit="${order.id}">Export XIT ACT (Transfer)</div>
+          <div class="dots-menu-item" data-export-xit="${order.id}">Copy XIT ACT (Transfer)</div>
+          <div class="dots-menu-item" data-export-xit-contract="${order.id}">Copy XIT ACT (Contract)</div>
           ${(order.status === 'delivered' || order.status === 'denied') ? `<div class="dots-menu-item danger" data-delete="${order.id}">Delete</div>` : ''}
         </div>
       ` : ''}
@@ -226,7 +352,10 @@ function renderOrderDetail(){
           </div>
           ${order.username ? `<div class="odc-username">${escapeHtml(order.username)}</div>` : ''}
         </div>
-        <div class="odc-total" id="seller-edit-total-${order.id}">${money(order.total, cur)}</div>
+        <div style="text-align:right;">
+          <div class="odc-total" id="seller-edit-total-${order.id}">${money(order.total, cur)}</div>
+          ${order.orderDiscountPercent > 0 ? `<div style="font-size:11px; color:var(--ink-soft); margin-top:2px;">${order.orderDiscountPercent}% order discount</div>` : ''}
+        </div>
       </div>
 
       <div class="odc-section">
@@ -270,13 +399,29 @@ function renderOrderDetail(){
           <thead><tr><th>Material</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Subtotal</th><th class="num">Produced</th><th class="num">Ready</th></tr></thead>
           <tbody>${itemsHtml}</tbody>
         </table>
+        ${addMaterialRowHtml}
         ${!isEditing ? `
           <div class="comment-actions" style="margin-top:8px;">
             <button class="btn btn-ghost btn-small" data-save-progress="${order.id}">Save Progress</button>
+            <button class="btn btn-ghost btn-small" data-copy-csv="${order.id}" title="Copy as Ticker,Qty,Price CSV">Copy CSV</button>
             <span class="toast" id="progress-toast-${order.id}"></span>
+            <span class="toast" id="copy-csv-toast-${order.id}"></span>
           </div>
         ` : ''}
       </div>
+
+      ${(!isEditing && order.status !== 'delivered' && order.status !== 'denied') ? estimatedReadyHtml(order) : ''}
+
+      ${!isEditing ? `
+        <div class="odc-section">
+          <div class="odc-section-label">Order Discount</div>
+          <div class="comment-actions">
+            <input type="number" min="0" max="100" step="1" value="${order.orderDiscountPercent || 0}" data-order-discount="${order.id}" class="qty-input" style="width:70px;">
+            <span style="font-size:12px; color:var(--ink-soft);">% off the whole order total, on top of each material's own price</span>
+            <span class="toast" id="order-discount-toast-${order.id}"></span>
+          </div>
+        </div>
+      ` : ''}
 
       ${(order.sourcePlans && order.sourcePlans.length) ? `
         <div class="odc-section">
@@ -346,6 +491,26 @@ function renderOrderDetail(){
   panel.querySelectorAll('[data-save-progress]').forEach(btn => {
     btn.addEventListener('click', () => saveOrderProgress(order));
   });
+  panel.querySelectorAll('[data-add-material]').forEach(btn => {
+    btn.addEventListener('click', () => addPendingOrderMaterial(order));
+  });
+  panel.querySelectorAll('[data-remove-pending]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const [orderId, materialId] = btn.dataset.removePending.split(':');
+      const list = pendingNewOrderItems[orderId];
+      if(list){
+        pendingNewOrderItems[orderId] = list.filter(i => i.materialId !== materialId);
+        if(pendingNewOrderItems[orderId].length === 0) delete pendingNewOrderItems[orderId];
+      }
+      renderOrderDetail();
+    });
+  });
+  panel.querySelectorAll('[data-copy-csv]').forEach(btn => {
+    btn.addEventListener('click', () => copyOrderCsv(order));
+  });
+  panel.querySelectorAll('[data-order-discount]').forEach(inp => {
+    inp.addEventListener('input', () => scheduleOrderDiscountAutoSave(order));
+  });
   panel.querySelectorAll('[data-toggle-menu]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -358,6 +523,9 @@ function renderOrderDetail(){
   });
   panel.querySelectorAll('[data-export-xit]').forEach(el => {
     el.addEventListener('click', () => { orderMenuOpen = false; renderOrderDetail(); exportXitActTransfer(order); });
+  });
+  panel.querySelectorAll('[data-export-xit-contract]').forEach(el => {
+    el.addEventListener('click', () => { orderMenuOpen = false; renderOrderDetail(); exportXitActContract(order); });
   });
   panel.querySelectorAll('[data-cancel-edit]').forEach(btn => {
     btn.addEventListener('click', () => toggleOrderEdit(null));
@@ -409,14 +577,21 @@ function setOrderSearch(term){
   renderOrdersList();
 }
 
+const pendingNewOrderItems = {}; // orderId -> staged [{materialId, name, qty, price}] not yet saved
+
 function toggleOrderEdit(id){
+  const leavingId = editingOrderId;
   editingOrderId = (editingOrderId === id) ? null : id;
+  if(leavingId && leavingId !== editingOrderId){
+    delete pendingNewOrderItems[leavingId]; // discard any unsaved "add material" rows
+  }
   renderOrderDetail();
 }
 
 function recalcSellerEditTotal(order){
   let total = 0;
-  order.items.forEach(it => {
+  const allItems = [...order.items, ...(pendingNewOrderItems[order.id] || [])];
+  allItems.forEach(it => {
     const inp = document.querySelector(`[data-seller-qty="${order.id}:${it.materialId}"]`);
     if(!inp) return;
     const qty = Math.max(0, parseFloat(inp.value) || 0);
@@ -429,10 +604,32 @@ function recalcSellerEditTotal(order){
   if(totalEl) totalEl.textContent = money(total, order.currency || 'NCC');
 }
 
+/* Staging a new material onto an order being edited. Nothing is sent to
+   the server here — it just adds a row to pendingNewOrderItems, which
+   renderOrderDetail() displays alongside the real items, and
+   saveSellerOrderEdit() merges in when the whole edit is actually saved.
+   Cancelling the edit (toggleOrderEdit) discards it entirely. */
+function addPendingOrderMaterial(order){
+  const select = document.getElementById(`add-material-select-${order.id}`);
+  const qtyInput = document.getElementById(`add-material-qty-${order.id}`);
+  if(!select || !select.value) return;
+  const mat = materials.find(m => m.id === select.value);
+  if(!mat) return;
+  const qty = Math.max(1, parseFloat(qtyInput.value) || 1);
+  if(!pendingNewOrderItems[order.id]) pendingNewOrderItems[order.id] = [];
+  pendingNewOrderItems[order.id].push({ materialId: mat.id, name: mat.name, qty, price: mat.price });
+  renderOrderDetail();
+}
+
 async function saveSellerOrderEdit(order){
   const toast = document.getElementById(`seller-edit-toast-${order.id}`);
   const newItems = [];
   order.items.forEach(it => {
+    const inp = document.querySelector(`[data-seller-qty="${order.id}:${it.materialId}"]`);
+    const qty = inp ? Math.max(0, parseFloat(inp.value) || 0) : it.qty;
+    if(qty > 0) newItems.push({ materialId: it.materialId, qty });
+  });
+  (pendingNewOrderItems[order.id] || []).forEach(it => {
     const inp = document.querySelector(`[data-seller-qty="${order.id}:${it.materialId}"]`);
     const qty = inp ? Math.max(0, parseFloat(inp.value) || 0) : it.qty;
     if(qty > 0) newItems.push({ materialId: it.materialId, qty });
@@ -456,7 +653,9 @@ async function saveSellerOrderEdit(order){
         return { materialId: ni.materialId, name: existing?.name || ni.materialId, qty: ni.qty, price: existing?.price || 0, subtotal: +(ni.qty * (existing?.price || 0)).toFixed(2), producedQty };
       });
       order.items = updated;
-      order.total = +updated.reduce((s, i) => s + i.subtotal, 0).toFixed(2);
+      const rawSum = updated.reduce((s, i) => s + i.subtotal, 0);
+      const discount = Math.min(100, Math.max(0, Number(order.orderDiscountPercent) || 0));
+      order.total = +(rawSum * (1 - discount / 100)).toFixed(2);
       order.currency = newCurrency;
       order.pickupLocation = newPickup;
     }else{
@@ -466,6 +665,8 @@ async function saveSellerOrderEdit(order){
       order.pickupLocation = result.pickupLocation;
     }
     editingOrderId = null;
+    delete pendingNewOrderItems[order.id];
+    materialDemandCache = null; // quantities/materials changed — outstanding demand did too
     renderOrdersList();
     updatePendingBadge();
   }catch(e){
@@ -483,6 +684,7 @@ async function setOrderStatus(id, status){
     await callManageOrder('setStatus', { id, newStatus: status });
     order.status = status;
     order.handledBy = sellerName;
+    materialDemandCache = null; // this order's status just changed — its contribution to the queue may have too
     renderOrdersList();
     updatePendingBadge();
   }catch(e){
@@ -559,6 +761,7 @@ async function saveOrderProgress(order){
     if(toast){
       setToastSuccess(toast, 'Saved.', 2000);
     }
+    materialDemandCache = null; // producedQty changed — outstanding demand did too
     // Keep the list row's mini progress % in sync without a full refetch.
     const row = document.querySelector(`[data-select-order="${order.id}"]`);
     if(row){
@@ -652,23 +855,122 @@ function buildXitActTransferPackage(order){
   };
 }
 
-function exportXitActTransfer(order){
+async function exportXitActTransfer(order){
   if(!xitActOrigin || !xitActOrigin.trim()){
-    console.warn('No XIT ACT origin storage set (Seller Settings) — the exported file will use the "Configure on Execution" placeholder for origin too, which real-world testing showed does not reliably import.');
+    console.warn('No XIT ACT origin storage set (Seller Settings) — the copied package will use the "Configure on Execution" placeholder for origin too, which real-world testing showed does not reliably import.');
   }
   const pkg = buildXitActTransferPackage(order);
   // Compact, single line — matches exactly what refined-prun's own
-  // downloadJson() produces by default (no pretty-print). Pretty-printed,
-  // multi-line JSON pasted into their "Paste JSON" field (a single-line
-  // text input, not a textarea) can get mangled by the browser before it
-  // ever reaches JSON.parse — this avoids that entirely.
+  // downloadJson() produces by default (no pretty-print), and avoids the
+  // multi-line-paste-mangling issue their "Paste JSON" field has.
   const jsonString = JSON.stringify(pkg);
-  const blob = new Blob([jsonString], { type: 'application/json' });
-  const link = document.createElement('a');
-  link.download = `${order.customerName} ${order.id.slice(-6).toUpperCase()}-${Date.now()}.json`;
-  link.href = URL.createObjectURL(blob);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(link.href);
+  const toast = document.getElementById(`copy-csv-toast-${order.id}`);
+  try{
+    await navigator.clipboard.writeText(jsonString);
+    if(toast) setToastSuccess(toast, 'Transfer JSON copied!', 2500);
+  }catch(e){
+    console.error('Copy failed:', e);
+    if(toast) setToastError(toast, 'Could not copy — check browser permissions.');
+  }
+}
+
+/* Same idea as the transfer export, but a "CONT Trade" action instead —
+   sets up a selling contract in-game. Schema confirmed against a real
+   working export, not guessed: unlike the transfer, contLocation and
+   currency both come straight from the order itself (the buyer's chosen
+   pickup location and currency), not a saved seller setting — those are
+   genuinely order-specific here, not something we'd need you to configure
+   once. daysToFulfill has no real order-derived equivalent, so it's a
+   simple fixed default matching the confirmed working example. */
+function buildXitActContractPackage(order){
+  const groupName = `Order ${order.id.slice(-6).toUpperCase()}`;
+
+  return {
+    global: { name: `${order.customerName} ${order.id.slice(-6).toUpperCase()} Contract` },
+    groups: [
+      {
+        name: groupName,
+        type: 'Paste'
+      }
+    ],
+    actions: [
+      {
+        group: groupName,
+        contTradeType: 'SELLING',
+        contLocation: order.pickupLocation || '',
+        currency: order.currency || 'NCC',
+        daysToFulfill: contractDaysToFulfill || '7',
+        name: `Contract for ${order.customerName}`,
+        type: 'CONT Trade'
+      }
+    ]
+  };
+}
+
+/* Copies the order's items as plain CSV text — Ticker,Qty,Price per line,
+   no header row. Same clipboard pattern as the buyer's "Copy Ticket #"
+   (navigator.clipboard with a graceful fallback message if the browser
+   blocks it). */
+/* Order-level discount % — applied on top of each material's own price,
+   to the order's whole total. Auto-saves the same debounced way the
+   Materials tab's Discount % field does: wait ~700ms after the last
+   keystroke, then persist. The server recomputes the real total from the
+   order's own current items (never trusts a client-sent total), so this
+   stays correct even if quantities changed since the page loaded. */
+const orderDiscountAutoSaveTimers = {};
+
+function scheduleOrderDiscountAutoSave(order){
+  if(orderDiscountAutoSaveTimers[order.id]) clearTimeout(orderDiscountAutoSaveTimers[order.id]);
+  orderDiscountAutoSaveTimers[order.id] = setTimeout(() => autoSaveOrderDiscount(order), 700);
+}
+
+async function autoSaveOrderDiscount(order){
+  const inp = document.querySelector(`[data-order-discount="${order.id}"]`);
+  const toast = document.getElementById(`order-discount-toast-${order.id}`);
+  if(!inp) return;
+  const discountPercent = Math.min(100, Math.max(0, parseFloat(inp.value) || 0));
+  try{
+    const result = await callManageOrder('updateOrderDiscount', { id: order.id, discountPercent });
+    order.orderDiscountPercent = discountPercent;
+    if(demoMode){
+      const rawSum = order.items.reduce((s, i) => s + i.subtotal, 0);
+      order.total = +(rawSum * (1 - discountPercent / 100)).toFixed(2);
+    }else{
+      order.total = result.total;
+    }
+    const totalEl = document.getElementById(`seller-edit-total-${order.id}`);
+    if(totalEl) totalEl.textContent = money(order.total, order.currency || 'NCC');
+    setToastSuccess(toast, 'Saved.', 1500);
+    // Keep the compact list row's status/date visible but no total shown
+    // there today, so nothing else needs refreshing after this.
+  }catch(e){
+    console.error('Order discount save failed:', e);
+    setToastError(toast, e.message || 'Could not save.');
+  }
+}
+
+async function copyOrderCsv(order){
+  const toast = document.getElementById(`copy-csv-toast-${order.id}`);
+  const lines = order.items.map(it => `${it.name},${it.qty},${it.price}`);
+  const csv = lines.join('\n');
+  try{
+    await navigator.clipboard.writeText(csv);
+    if(toast) setToastSuccess(toast, 'Copied!', 2000);
+  }catch(e){
+    console.error('Copy failed:', e);
+    if(toast) setToastError(toast, 'Could not copy — select it manually.');
+  }
+}
+
+async function exportXitActContract(order){
+  const pkg = buildXitActContractPackage(order);
+  const jsonString = JSON.stringify(pkg);
+  const toast = document.getElementById(`copy-csv-toast-${order.id}`);
+  try{
+    await navigator.clipboard.writeText(jsonString);
+    if(toast) setToastSuccess(toast, 'Contract JSON copied!', 2500);
+  }catch(e){
+    console.error('Copy failed:', e);
+    if(toast) setToastError(toast, 'Could not copy — check browser permissions.');
+  }
 }

@@ -76,6 +76,7 @@ function renderOrderTable(){
       <td class="num" id="sub-${m.id}">${money(0)}</td>
       <td class="num" id="weight-${m.id}">0.00</td>
       <td class="num" id="volume-${m.id}">0.00</td>
+      <td class="num" id="wait-${m.id}">${materialWaitCellHtml(m.id)}</td>
     `;
     body.appendChild(tr);
   });
@@ -84,7 +85,28 @@ function renderOrderTable(){
   });
   enhanceNumberInputsIn(body, 'input.qty-input', 'stacked');
   updateOrderTotals();
+  if(!demoMode) ensureBuyerMaterialDemandLoaded(); // fire-and-forget; guarded, cheap after the first call
 }
+
+/* Compact "Est." cell for the order form — a plain number of days
+   (materials.stockpile/productionPerDay are seller-entered, manual), a
+   green "Ready" for anything already covered by stockpile, or a muted
+   dash while demand hasn't loaded yet or no rate is set to estimate from. */
+function materialWaitCellHtml(materialId){
+  const est = estimateMaterialDays(materialId);
+  if(!est) return '<span class="mat-wait-loading">—</span>';
+  if(est.unknown) return '<span class="mat-wait-unknown">—</span>';
+  if(est.days <= 0) return '<span class="mat-wait-ready">Ready</span>';
+  const rounded = Math.ceil(est.days * 10) / 10;
+  return `<span class="mat-wait-days">~${rounded}d</span>`;
+}
+
+async function ensureBuyerMaterialDemandLoaded(){
+  if(materialDemandCache) return;
+  materialDemandCache = await loadMaterialDemand();
+  renderOrderTable();
+}
+
 
 function updateOrderTotals(){
   let total = 0;
@@ -208,7 +230,10 @@ function buildBuyerTicketElement(order){
       ${order.sellerComment ? `<div class="comment-display"><span class="comment-tag">Note from seller</span>${escapeHtml(order.sellerComment)}</div>` : ''}
     </div>
     <div class="ticket-foot">
-      <div class="ticket-total">${money(order.total, cur)}</div>
+      <div>
+        <div class="ticket-total">${money(order.total, cur)}</div>
+        ${order.orderDiscountPercent > 0 ? `<div style="font-size:11px; color:var(--ink-soft); margin-top:2px;">${order.orderDiscountPercent}% order discount applied</div>` : ''}
+      </div>
       ${isPending ? `
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
           <button class="btn btn-deny btn-small" data-buyer-cancel="${order.id}">Cancel Order</button>
@@ -514,7 +539,10 @@ function showOrderConfirmation(order){
         ${order.note ? `<div class="buyer-note-display"><span class="buyer-note-tag">Your note</span>${escapeHtml(order.note)}</div>` : ''}
       </div>
       <div class="ticket-foot">
-        <div class="ticket-total">${money(order.total, cur)}</div>
+        <div>
+          <div class="ticket-total">${money(order.total, cur)}</div>
+          ${order.orderDiscountPercent > 0 ? `<div style="font-size:11px; color:var(--ink-soft); margin-top:2px;">${order.orderDiscountPercent}% order discount applied</div>` : ''}
+        </div>
         <div style="display:flex; align-items:center; gap:10px;">
           <span class="toast" id="copy-ticket-toast"></span>
           <button class="btn btn-ghost btn-small" id="copy-ticket-btn">Copy Ticket #</button>

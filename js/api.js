@@ -57,7 +57,8 @@ function dbToOrder(row){
     confirmedAt: row.confirmed_at || null,
     productionAt: row.production_at || null,
     deliveredAt: row.delivered_at || null,
-    deniedAt: row.denied_at || null
+    deniedAt: row.denied_at || null,
+    orderDiscountPercent: Number(row.order_discount_percent) || 0
   };
 }
 
@@ -74,7 +75,9 @@ async function loadMaterials(){
       discountPercent: Number(r.discount_percent) || 0,
       showOnOrderList: r.show_on_order_list !== false,
       cxPrice: (r.cx_price === null || r.cx_price === undefined) ? null : Number(r.cx_price),
-      category: r.category || null
+      category: r.category || null,
+      stockpile: Number(r.stockpile) || 0,
+      productionPerDay: Number(r.production_per_day) || 0
     }));
   }catch(e){
     // Deliberately NOT resetting `materials` to [] here — a failed request
@@ -240,6 +243,47 @@ async function loadXitActOrigin(){
 async function saveXitActOrigin(origin){
   await callManageShopSettings('saveXitActOrigin', { origin });
 }
+
+async function loadContractDaysToFulfill(){
+  try{
+    const rows = await sbFetch('app_settings?select=contract_days_to_fulfill&id=eq.1');
+    return rows && rows[0] && rows[0].contract_days_to_fulfill ? rows[0].contract_days_to_fulfill : '7';
+  }catch(e){
+    console.error(e);
+    return '7';
+  }
+}
+async function saveContractDaysToFulfill(days){
+  await callManageShopSettings('saveContractDaysToFulfill', { days });
+}
+
+async function saveMaterialProduction(id, stockpile, productionPerDay){
+  await callManageShopSettings('updateMaterialProduction', { id, stockpile, productionPerDay });
+}
+
+async function loadMaterialDemand(){
+  try{
+    const result = await callListOrders('materialDemand', {});
+    return result.demand || {};
+  }catch(e){
+    console.error('Material demand load failed:', e);
+    return {};
+  }
+}
+
+async function loadAutoLogoutMinutes(){
+  try{
+    const rows = await sbFetch('app_settings?select=auto_logout_minutes&id=eq.1');
+    return rows && rows[0] && rows[0].auto_logout_minutes !== null ? Number(rows[0].auto_logout_minutes) : 20;
+  }catch(e){
+    console.error(e);
+    return 20;
+  }
+}
+async function saveAutoLogoutMinutes(minutes){
+  await callManageShopSettings('saveAutoLogoutMinutes', { minutes });
+}
+
 async function saveDefaultCxExchange(exchange){
   await callManageShopSettings('saveDefaultCxExchange', { exchange });
 }

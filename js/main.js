@@ -43,6 +43,8 @@ async function init(){
   populateBuyerSelects();
   defaultCxExchange = await loadDefaultCxExchange();
   xitActOrigin = await loadXitActOrigin();
+  contractDaysToFulfill = await loadContractDaysToFulfill();
+  autoLogoutMinutes = await loadAutoLogoutMinutes();
   renderCxExchangeSelector();
   loadDraftOrder();
   await checkAdminExists();
@@ -61,6 +63,25 @@ async function init(){
 
   document.getElementById('tab-order').addEventListener('click', () => showTab('order'));
   document.getElementById('theme-toggle-btn').addEventListener('click', toggleTheme);
+  enhanceNumberInput(document.getElementById('contract-days-input'), 'stacked');
+  enhanceNumberInput(document.getElementById('auto-logout-minutes-input'), 'stacked');
+  document.querySelectorAll('[data-acc-toggle]').forEach(row => {
+    row.addEventListener('click', () => {
+      // .acc-desc is usually the toggle row's own next sibling, but where
+      // the row sits inside a wrapper alongside other controls (e.g. the
+      // Materials panel's ⋮ menu + Edit button share its header row),
+      // it's the wrapper's next sibling instead.
+      let desc = row.nextElementSibling;
+      if(!desc || !desc.classList.contains('acc-desc')){
+        const wrapper = row.parentElement;
+        desc = wrapper ? wrapper.nextElementSibling : null;
+      }
+      if(!desc || !desc.classList.contains('acc-desc')) return;
+      const isOpen = desc.classList.toggle('open');
+      const caret = row.querySelector('.acc-caret');
+      if(caret) caret.classList.toggle('open', isOpen);
+    });
+  });
   document.getElementById('tab-status').addEventListener('click', () => showTab('status'));
   document.getElementById('tab-seller').addEventListener('click', () => showTab('seller'));
   document.getElementById('submit-order-btn').addEventListener('click', submitOrder);
@@ -91,6 +112,16 @@ async function init(){
   document.getElementById('update-fio-weights-btn').addEventListener('click', updateWeightsFromFio);
   document.getElementById('update-cx-prices-btn').addEventListener('click', updateCxPricesClick);
   document.getElementById('materials-edit-toggle-btn').addEventListener('click', toggleMaterialsEditMode);
+  document.getElementById('save-prices-btn').addEventListener('click', savePricesClick);
+  document.getElementById('materials-tools-menu-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const menu = document.getElementById('materials-tools-menu');
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  });
+  document.addEventListener('click', () => {
+    const menu = document.getElementById('materials-tools-menu');
+    if(menu) menu.style.display = 'none';
+  });
   document.getElementById('save-cx-exchange-btn').addEventListener('click', saveDefaultCxExchangeClick);
   document.getElementById('gate-submit-btn').addEventListener('click', attemptUnlock);
   document.getElementById('gate-password-input').addEventListener('keydown', e => {
@@ -112,6 +143,9 @@ async function init(){
   document.getElementById('save-site-title-btn').addEventListener('click', saveSiteTitleClick);
   document.getElementById('save-accent-color-btn').addEventListener('click', saveAccentColorClick);
   document.getElementById('save-xit-origin-btn').addEventListener('click', saveXitOriginClick);
+  document.getElementById('save-contract-days-btn').addEventListener('click', saveContractDaysClick);
+  document.getElementById('save-auto-logout-btn').addEventListener('click', saveAutoLogoutClick);
+  document.getElementById('stay-logged-in-btn').addEventListener('click', stayLoggedInClick);
   document.getElementById('reset-accent-color-btn').addEventListener('click', resetAccentColorClick);
   document.getElementById('orders-open-toggle').addEventListener('change', onOrdersOpenToggle);
   document.getElementById('load-demo-btn').addEventListener('click', loadDemoData);

@@ -137,6 +137,7 @@
             <th class="num">Subtotal</th>
             <th class="num">Weight</th>
             <th class="num">Volume</th>
+            <th class="num" title="Estimated wait if this material isn't already in stock, based on the seller's current stockpile and production rate">Est. Wait</th>
           </tr>
         </thead>
         <tbody id="order-materials-body"></tbody>
@@ -147,6 +148,7 @@
             <td class="num" id="order-total-amount">$0.00</td>
             <td class="num" id="order-total-weight">0.00 t</td>
             <td class="num" id="order-total-volume">0.00 m³</td>
+            <td></td>
           </tr>
         </tfoot>
       </table>
@@ -289,14 +291,14 @@
 
       <div id="seller-subview-statistics" class="seller-subview">
         <div class="panel">
-          <h2>Orders by Status</h2>
-          <div class="sub">Live counts across every order in the system.</div>
+          <div class="acc-title-row" data-acc-toggle><span class="acc-caret">▶</span><h2>Orders by Status</h2></div>
+          <div class="acc-desc">Live counts across every order in the system.</div>
           <div class="stats-grid" id="status-stats-grid"></div>
         </div>
 
         <div class="panel">
-          <h2>Money Waiting</h2>
-          <div class="sub">Order value by currency and status.</div>
+          <div class="acc-title-row" data-acc-toggle><span class="acc-caret">▶</span><h2>Money Waiting</h2></div>
+          <div class="acc-desc">Order value by currency and status.</div>
           <table class="stats-table" id="currency-stats-table">
             <thead>
               <tr>
@@ -317,8 +319,8 @@
         <div class="materials-split">
           <div class="materials-side-col">
             <div class="panel">
-              <h2>Default CX Exchange</h2>
-              <div class="sub">Which exchange "Update CX Prices" pulls Ask/Bid prices from.</div>
+              <div class="acc-title-row" data-acc-toggle><span class="acc-caret">▶</span><h2>Default CX Exchange</h2></div>
+          <div class="acc-desc">Which exchange "Update CX Prices" pulls Ask/Bid prices from.</div>
               <select id="default-cx-exchange-select" style="width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:3px; background:var(--paper); color:var(--ink); font-family:var(--mono); font-size:13px;"></select>
               <div style="margin-top:12px; display:flex; gap:10px;">
                 <button class="btn btn-ghost btn-small" id="save-cx-exchange-btn">Save</button>
@@ -327,8 +329,8 @@
             </div>
 
             <div class="panel">
-              <h2>Pickup Locations</h2>
-              <div class="sub">Options shown in the buyer's Pickup Location dropdown.</div>
+              <div class="acc-title-row" data-acc-toggle><span class="acc-caret">▶</span><h2>Pickup Locations</h2></div>
+          <div class="acc-desc">Options shown in the buyer's Pickup Location dropdown.</div>
               <div id="pickup-options-list"></div>
               <div style="margin-top:14px; display:flex; gap:10px;" id="pickup-options-actions">
                 <button class="btn btn-secondary btn-small" id="add-pickup-option-btn">+ Add Location</button>
@@ -338,8 +340,8 @@
             </div>
 
             <div class="panel">
-              <h2>Currencies</h2>
-              <div class="sub">Options shown in the buyer's Currency dropdown.</div>
+              <div class="acc-title-row" data-acc-toggle><span class="acc-caret">▶</span><h2>Currencies</h2></div>
+          <div class="acc-desc">Options shown in the buyer's Currency dropdown.</div>
               <div id="currency-options-list"></div>
               <div style="margin-top:14px; display:flex; gap:10px;" id="currency-options-actions">
                 <button class="btn btn-secondary btn-small" id="add-currency-option-btn">+ Add Currency</button>
@@ -351,17 +353,25 @@
 
           <div class="panel materials-main-col">
             <div class="panel-title-row">
-              <h2>Manage Materials &amp; Prices</h2>
-              <button class="btn btn-ghost btn-small" id="materials-edit-toggle-btn">Edit</button>
+              <div class="acc-title-row" data-acc-toggle><span class="acc-caret">▶</span><h2>Manage Materials &amp; Prices</h2></div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <div class="dots-menu-wrap">
+                  <button class="btn btn-ghost btn-small dots-btn" id="materials-tools-menu-btn" title="FIO sync tools">⋮</button>
+                  <div class="dots-menu" id="materials-tools-menu" style="display:none;">
+                    <div class="dots-menu-item" id="update-fio-weights-btn">Update Weight/Volume/Category from FIO</div>
+                    <div class="dots-menu-item" id="update-cx-prices-btn">Update CX Prices</div>
+                  </div>
+                </div>
+                <button class="btn btn-ghost btn-small" id="materials-edit-toggle-btn">Edit</button>
+              </div>
             </div>
-            <div class="sub">Discount %, My Price, and Show on List save automatically as you edit them. Press Edit to add, remove, reorder, or rename materials — press it again to save those and close.</div>
+            <div class="acc-desc">Discount %, My Price, and Show on List save automatically as you edit them. Press Edit to add, remove, reorder, or rename materials — press it again to save those and close.</div>
             <div class="sub" id="materials-readonly-note" style="display:none; color: var(--rust);">You're signed in as an employee — only admins can change materials or prices.</div>
 
             <div id="materials-manager"></div>
             <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;" id="materials-edit-actions">
               <button class="btn btn-secondary btn-small" id="add-material-btn" style="display:none;">+ Add Material</button>
-              <button class="btn btn-ghost btn-small" id="update-fio-weights-btn">Update Weight/Volume/Category from FIO</button>
-              <button class="btn btn-ghost btn-small" id="update-cx-prices-btn">Update CX Prices</button>
+              <button class="btn btn-secondary btn-small" id="save-prices-btn">Save Prices</button>
               <span class="toast" id="materials-toast"></span>
             </div>
           </div>
@@ -369,72 +379,124 @@
       </div>
 
       <div id="seller-subview-settings" class="seller-subview">
-        <div class="panel">
-          <h2>Page Title</h2>
-          <div class="sub">Shown in the browser tab and as the main heading at the top of every page.</div>
-          <input type="text" id="site-title-input" placeholder="e.g. Lotol Materials Co.">
-          <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-            <button class="btn btn-secondary btn-small" id="save-site-title-btn">Save Title</button>
-            <span class="toast" id="site-title-toast"></span>
-          </div>
-        </div>
+        <div class="settings-flat">
 
-        <div class="panel">
-          <h2>Accent Color</h2>
-          <div class="sub">The highlight color used for buttons, active tabs, and links — applies on top of whichever light/dark theme a visitor has chosen.</div>
-          <div style="display:flex; gap:10px; align-items:center;">
-            <input type="color" id="accent-color-input" value="#3fcdb8" style="width:60px; height:38px; padding:2px; border:1px solid var(--line); border-radius:3px; background:var(--paper); cursor:pointer;">
-            <button class="btn btn-secondary btn-small" id="save-accent-color-btn">Save Color</button>
-            <button class="btn btn-ghost btn-small" id="reset-accent-color-btn">Reset to Default</button>
-            <span class="toast" id="accent-color-toast"></span>
-          </div>
-        </div>
+          <div class="settings-flat-head">Branding</div>
 
-        <div class="panel">
-          <h2>XIT ACT Default Origin</h2>
-          <div class="sub">Your exact in-game storage name (e.g. "Moria Station Warehouse"), used as the origin on every "Export XIT ACT (Transfer)" file. Testing showed the extension's "Configure on Execution" placeholder only works reliably for one side of a transfer — the destination stays configurable, but the origin needs your real storage name here.</div>
-          <input type="text" id="xit-act-origin-input" placeholder="e.g. Moria Station Warehouse">
-          <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-            <button class="btn btn-secondary btn-small" id="save-xit-origin-btn">Save Origin</button>
-            <span class="toast" id="xit-origin-toast"></span>
+          <div class="settings-flat-row">
+            <div class="settings-flat-info">
+              <span class="settings-flat-label">Page Title</span>
+              <span class="settings-flat-desc">Browser tab + main heading.</span>
+            </div>
+            <div class="settings-flat-controls">
+              <input type="text" id="site-title-input" placeholder="e.g. Lotol Materials Co.">
+              <button class="btn btn-secondary btn-small" id="save-site-title-btn">Save Title</button>
+              <span class="toast" id="site-title-toast"></span>
+            </div>
           </div>
-        </div>
 
-        <div class="panel">
-          <h2>Order Intake</h2>
-          <div class="sub">Turn this off to stop taking new orders. The order form disappears from the buyer page right away — they can still check the status of orders already placed.</div>
-          <label class="toggle-row">
-            <input type="checkbox" id="orders-open-toggle" checked>
-            <span id="orders-open-label">Currently accepting new orders</span>
-          </label>
-          <span class="toast" id="orders-open-toast"></span>
-        </div>
-
-        <div class="panel">
-          <h2>Site Note</h2>
-          <div class="sub">A short line shown in the bar at the very top of the page, on both the buyer and seller views. Leave blank to hide it.</div>
-          <input type="text" id="site-note-input" placeholder="e.g. Orders ship out every Friday.">
-          <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-            <button class="btn btn-secondary btn-small" id="save-site-note-btn">Save Site Note</button>
-            <span class="toast" id="site-note-toast"></span>
+          <div class="settings-flat-row">
+            <div class="settings-flat-info">
+              <span class="settings-flat-label">Accent Color</span>
+              <span class="settings-flat-desc">Buttons, active tabs, and links — applies on top of whichever theme a visitor has chosen.</span>
+            </div>
+            <div class="settings-flat-controls">
+              <input type="color" id="accent-color-input" value="#3fcdb8" style="width:44px; height:34px; padding:2px; border:1px solid var(--line); border-radius:3px; background:var(--paper); cursor:pointer;">
+              <button class="btn btn-secondary btn-small" id="save-accent-color-btn">Save</button>
+              <button class="btn btn-ghost btn-small" id="reset-accent-color-btn">Reset</button>
+              <span class="toast" id="accent-color-toast"></span>
+            </div>
           </div>
-        </div>
 
-        <div class="panel">
-          <h2>Buyer Page Notice</h2>
-          <div class="sub">Shown at the top of the buyer's order page. Leave blank to hide it. Buyers see the latest version when they load or refresh the page.</div>
-          <textarea id="notice-textarea" placeholder="e.g. Closed for the holiday weekend, back Monday."></textarea>
-          <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-            <button class="btn btn-secondary btn-small" id="save-notice-btn">Save Notice</button>
-            <span class="toast" id="notice-toast"></span>
+          <div class="settings-flat-head">Storefront</div>
+
+          <div class="settings-flat-row">
+            <div class="settings-flat-info">
+              <span class="settings-flat-label">Order Intake</span>
+              <span class="settings-flat-desc">Turn this off to stop taking new orders. The order form disappears from the buyer page right away — they can still check the status of orders already placed.</span>
+            </div>
+            <div class="settings-flat-controls">
+              <label class="toggle-row">
+                <input type="checkbox" id="orders-open-toggle" checked>
+                <span id="orders-open-label">Currently accepting new orders</span>
+              </label>
+              <span class="toast" id="orders-open-toast"></span>
+            </div>
           </div>
+
+          <div class="settings-flat-row">
+            <div class="settings-flat-info">
+              <span class="settings-flat-label">Buyer Page Notice</span>
+              <span class="settings-flat-desc">Shown at the top of the buyer's order page. Leave blank to hide it. Buyers see the latest version when they load or refresh the page.</span>
+            </div>
+            <div class="settings-flat-controls settings-flat-controls-stack">
+              <textarea id="notice-textarea" placeholder="e.g. Closed for the holiday weekend, back Monday."></textarea>
+              <div style="display:flex; gap:10px; align-items:center;">
+                <button class="btn btn-secondary btn-small" id="save-notice-btn">Save Notice</button>
+                <span class="toast" id="notice-toast"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-flat-row">
+            <div class="settings-flat-info">
+              <span class="settings-flat-label">Site-Wide Note</span>
+              <span class="settings-flat-desc">A short line shown in the bar at the very top of the page, on both the buyer and seller views. Leave blank to hide it.</span>
+            </div>
+            <div class="settings-flat-controls">
+              <input type="text" id="site-note-input" placeholder="e.g. Orders ship out every Friday.">
+              <button class="btn btn-secondary btn-small" id="save-site-note-btn">Save Site Note</button>
+              <span class="toast" id="site-note-toast"></span>
+            </div>
+          </div>
+
+          <div class="settings-flat-head">XIT ACT Integration</div>
+
+          <div class="settings-flat-row">
+            <div class="settings-flat-info">
+              <span class="settings-flat-label">Transfer Origin (MTRA)</span>
+              <span class="settings-flat-desc">Your exact in-game storage name, used as the origin. Testing showed the extension's "Configure on Execution" placeholder only works reliably for one side of a transfer — the destination stays configurable, but the origin needs a real value here.</span>
+            </div>
+            <div class="settings-flat-controls">
+              <input type="text" id="xit-act-origin-input" placeholder="e.g. Moria Station Warehouse">
+              <button class="btn btn-secondary btn-small" id="save-xit-origin-btn">Save Origin</button>
+              <span class="toast" id="xit-origin-toast"></span>
+            </div>
+          </div>
+
+          <div class="settings-flat-row">
+            <div class="settings-flat-info">
+              <span class="settings-flat-label">Contract Days (CONT Trade)</span>
+              <span class="settings-flat-desc">Days to fulfill on every contract package. Location and currency come from the order itself, not a saved default.</span>
+            </div>
+            <div class="settings-flat-controls">
+              <input type="number" id="contract-days-input" min="1" step="1" placeholder="7" style="width:90px;">
+              <button class="btn btn-secondary btn-small" id="save-contract-days-btn">Save</button>
+              <span class="toast" id="contract-days-toast"></span>
+            </div>
+          </div>
+
+          <div class="settings-flat-head">Security</div>
+
+          <div class="settings-flat-row">
+            <div class="settings-flat-info">
+              <span class="settings-flat-label">Auto-Logout After</span>
+              <span class="settings-flat-desc">Minutes of inactivity before the seller dashboard automatically signs you out. Set to 0 to disable. A warning appears 60 seconds before it happens, with a chance to stay logged in.</span>
+            </div>
+            <div class="settings-flat-controls">
+              <input type="number" id="auto-logout-minutes-input" min="0" max="1440" step="1" placeholder="20" style="width:90px;">
+              <button class="btn btn-secondary btn-small" id="save-auto-logout-btn">Save</button>
+              <span class="toast" id="auto-logout-toast"></span>
+            </div>
+          </div>
+
         </div>
       </div>
 
       <div id="seller-subview-access" class="seller-subview">
         <div class="panel">
-          <h2>Employees</h2>
-          <div class="sub">Create employee logins and choose which tabs each one can see. Employees can never edit materials or prices, regardless of tab access.</div>
+          <div class="acc-title-row" data-acc-toggle><span class="acc-caret">▶</span><h2>Employees</h2></div>
+          <div class="acc-desc">Create employee logins and choose which tabs each one can see. Employees can never edit materials or prices, regardless of tab access.</div>
           <div id="employees-list"></div>
 
           <div class="employee-add-row">
@@ -446,8 +508,8 @@
         </div>
 
         <div class="panel">
-          <h2>Admin Login</h2>
-          <div class="sub">Change the username and password used to sign in as an admin.</div>
+          <div class="acc-title-row" data-acc-toggle><span class="acc-caret">▶</span><h2>Admin Login</h2></div>
+          <div class="acc-desc">Change the username and password used to sign in as an admin.</div>
           <div class="change-pw-row">
             <input type="text" id="new-admin-username-input" placeholder="New admin username">
             <button class="btn btn-ghost btn-small" id="change-admin-username-btn">Update Username</button>
@@ -461,8 +523,8 @@
         </div>
 
         <div class="panel">
-          <h2>Demo Data</h2>
-          <div class="sub">Fills the page with sample orders and materials to preview styling. This never touches your real Supabase data — nothing is saved.</div>
+          <div class="acc-title-row" data-acc-toggle><span class="acc-caret">▶</span><h2>Demo Data</h2></div>
+          <div class="acc-desc">Fills the page with sample orders and materials to preview styling. This never touches your real Supabase data — nothing is saved.</div>
           <button class="btn btn-ghost btn-small" id="load-demo-btn">Load Demo Data</button>
         </div>
       </div>
@@ -471,6 +533,14 @@
 
   </section>
 
+</div>
+
+<div id="auto-logout-warning" style="display:none;">
+  <div class="auto-logout-box">
+    <div class="auto-logout-title">Still there?</div>
+    <div class="auto-logout-text">You'll be logged out in <span id="auto-logout-countdown">60</span>s due to inactivity.</div>
+    <button class="btn btn-primary btn-small" id="stay-logged-in-btn">Stay Logged In</button>
+  </div>
 </div>
 
 <script src="js/config.js"></script>

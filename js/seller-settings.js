@@ -151,4 +151,49 @@ async function loadXitOriginIntoEditor(){
   input.value = xitActOrigin;
 }
 
+let contractDaysToFulfill = '7';
+
+async function saveContractDaysClick(){
+  const input = document.getElementById('contract-days-input');
+  const toast = document.getElementById('contract-days-toast');
+  const val = String(Math.max(1, parseInt(input.value) || 7));
+  try{
+    await saveContractDaysToFulfill(val);
+    contractDaysToFulfill = val;
+    input.value = val;
+    setToastSuccess(toast, 'Saved.', 2000);
+  }catch(e){
+    console.error('Contract days save failed:', e);
+    setToastError(toast, e.message || 'Could not save.');
+  }
+}
+
+async function loadContractDaysIntoEditor(){
+  const input = document.getElementById('contract-days-input');
+  contractDaysToFulfill = await loadContractDaysToFulfill();
+  input.value = contractDaysToFulfill;
+}
+
+async function saveAutoLogoutClick(){
+  const input = document.getElementById('auto-logout-minutes-input');
+  const toast = document.getElementById('auto-logout-toast');
+  const val = Math.max(0, Math.min(1440, parseInt(input.value) || 0));
+  try{
+    await saveAutoLogoutMinutes(val);
+    autoLogoutMinutes = val;
+    input.value = val;
+    resetInactivityTimer(); // apply the new duration immediately, not just on next login
+    setToastSuccess(toast, 'Saved.', 2000);
+  }catch(e){
+    console.error('Auto-logout save failed:', e);
+    setToastError(toast, e.message || 'Could not save.');
+  }
+}
+
+async function loadAutoLogoutIntoEditor(){
+  const input = document.getElementById('auto-logout-minutes-input');
+  autoLogoutMinutes = await loadAutoLogoutMinutes();
+  input.value = autoLogoutMinutes;
+}
+
 /* ---------- Tabs ---------- */

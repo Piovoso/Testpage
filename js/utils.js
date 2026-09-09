@@ -224,6 +224,23 @@ const MATERIAL_CATEGORY_DEFAULT_COLOR = "#3d4a4d"; // neutral gray for anything 
    category-color convention from Refined PrUn. Falls back to a neutral
    gray chip if the material has no category set yet (e.g. added before
    an FIO sync, or FIO doesn't recognize the ticker). */
+/* Per-material estimated wait, shared by the buyer's order form and the
+   seller's order detail card. Compares total outstanding demand across
+   every active order (materialDemandCache, loaded separately) against
+   that material's own stockpile and production rate — both seller-entered,
+   manually. Returns null if demand hasn't loaded yet. */
+function estimateMaterialDays(materialId){
+  if(!materialDemandCache) return null;
+  const mat = materials.find(m => m.id === materialId);
+  const stockpile = mat ? (Number(mat.stockpile) || 0) : 0;
+  const rate = mat ? (Number(mat.productionPerDay) || 0) : 0;
+  const totalDemand = materialDemandCache[materialId] || 0;
+  const shortfall = Math.max(0, totalDemand - stockpile);
+  if(shortfall <= 0) return { days: 0, unknown: false };
+  if(rate <= 0) return { days: null, unknown: true };
+  return { days: shortfall / rate, unknown: false };
+}
+
 function materialTickerChip(name, category){
   const key = (category || '').toLowerCase().trim();
   const color = MATERIAL_CATEGORY_COLORS[key] || MATERIAL_CATEGORY_DEFAULT_COLOR;
