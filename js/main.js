@@ -148,8 +148,6 @@ async function init(){
   document.getElementById('stay-logged-in-btn').addEventListener('click', stayLoggedInClick);
   document.getElementById('reset-accent-color-btn').addEventListener('click', resetAccentColorClick);
   document.getElementById('orders-open-toggle').addEventListener('change', onOrdersOpenToggle);
-  document.getElementById('load-demo-btn').addEventListener('click', loadDemoData);
-  document.getElementById('exit-demo-btn').addEventListener('click', exitDemoMode);
   document.getElementById('connection-retry-btn').addEventListener('click', () => location.reload());
   document.getElementById('status-check-btn').addEventListener('click', checkOrderStatus);
   document.getElementById('status-check-input').addEventListener('keydown', e => {

@@ -84,13 +84,8 @@ async function authFetchOwnProfile(){
   return rows && rows[0] ? rows[0] : null;
 }
 
-/* Generic caller for every Edge Function this app uses. Centralizing this
-   means the demo-mode guard only has to exist in one place — without it,
-   demo mode (which is supposed to be 100% local/fake) would actually hit
-   real Edge Functions and could mutate real data, which defeats the
-   entire point of it. */
+/* Generic caller for every Edge Function this app uses. */
 async function callEdgeFunction(functionName, action, payload){
-  if(demoMode) return { ok: true }; // demo mode never touches the network
   const bearer = authSession ? authSession.accessToken : SUPABASE_KEY;
   let res;
   try{

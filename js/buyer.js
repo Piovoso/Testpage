@@ -58,10 +58,12 @@ function clearOrderClick(){
   document.getElementById('order-note').value = '';
   document.getElementById('pickup-location-select').selectedIndex = 0;
   document.getElementById('currency-select').selectedIndex = 0;
+  document.getElementById('requested-date-input').value = '';
   linkedPlans = [];
   renderLinkedPlans();
   clearDraftOrder();
   updateOrderTotals();
+  updateRequestedDateMin();
 }
 
 function renderOrderTable(){
@@ -86,11 +88,63 @@ function renderOrderTable(){
       saveDraftOrder();
       const waitCell = document.getElementById(`wait-${inp.dataset.id}`);
       if(waitCell) waitCell.innerHTML = materialWaitCellHtml(inp.dataset.id, Math.max(0, parseFloat(inp.value) || 0));
+      updateRequestedDateMin();
     });
   });
   enhanceNumberInputsIn(body, 'input.qty-input', 'stacked');
   updateOrderTotals();
-  if(!demoMode) ensureBuyerMaterialQueueLoaded(); // fire-and-forget; guarded, cheap after the first call
+  updateRequestedDateMin();
+  ensureBuyerMaterialQueueLoaded(); // fire-and-forget; guarded, cheap after the first call
+}
+
+/* Live minimum for the "Requested Arrival" date field — the earliest date
+   that's actually realistic given the current queue, the buyer's own
+   selected quantities, and each material's stockpile/production rate.
+   Updates on every quantity change, same live-recompute pattern as the
+   per-material "Est. Wait" column. A material with a real shortfall but
+   no production rate set doesn't push the minimum out (can't quantify an
+   unset rate), but the hint below the field says so plainly rather than
+   implying false precision. */
+function updateRequestedDateMin(){
+  const input = document.getElementById('requested-date-input');
+  const hint = document.getElementById('requested-date-hint');
+  if(!input) return;
+
+  let maxDays = 0;
+  let unknown = false;
+  let anySelected = false;
+  document.querySelectorAll('#order-materials-body .qty-input').forEach(qtyInp => {
+    const qty = Math.max(0, parseFloat(qtyInp.value) || 0);
+    if(qty <= 0) return;
+    anySelected = true;
+    const est = estimateMaterialDays(qtyInp.dataset.id, null, qty);
+    if(!est) return;
+    if(est.unknown) unknown = true;
+    if(est.days > maxDays) maxDays = est.days;
+  });
+
+  const minDate = new Date();
+  minDate.setDate(minDate.getDate() + Math.ceil(maxDays));
+  const minDateStr = minDate.toISOString().slice(0, 10);
+  input.min = minDateStr;
+  if(input.value && input.value < minDateStr){
+    input.value = minDateStr; // their previous pick is no longer early enough — bump it forward
+  }
+
+  if(!hint) return;
+  if(!anySelected){
+    hint.textContent = '';
+    hint.classList.remove('field-hint-warning');
+  }else if(unknown){
+    hint.textContent = 'Seller hasn\'t set a production rate for one or more of these materials yet — earliest date shown may not be accurate.';
+    hint.classList.add('field-hint-warning');
+  }else if(maxDays <= 0){
+    hint.textContent = 'Earliest possible: today.';
+    hint.classList.remove('field-hint-warning');
+  }else{
+    hint.textContent = `Earliest possible: ${minDateStr}, based on the current queue.`;
+    hint.classList.remove('field-hint-warning');
+  }
 }
 
 /* Compact "Est." cell for the order form — a plain number of days
@@ -112,7 +166,14 @@ function materialWaitCellHtml(materialId, currentQty){
 async function ensureBuyerMaterialQueueLoaded(){
   if(materialQueueCache) return;
   materialQueueCache = await loadMaterialQueue();
-  renderOrderTable();
+  // Refresh estimates in place — NOT a full renderOrderTable(), which
+  // would rebuild every row from scratch and wipe out any quantity the
+  // buyer already started typing while this fetch was still in flight.
+  document.querySelectorAll('#order-materials-body .qty-input').forEach(inp => {
+    const waitCell = document.getElementById(`wait-${inp.dataset.id}`);
+    if(waitCell) waitCell.innerHTML = materialWaitCellHtml(inp.dataset.id, Math.max(0, parseFloat(inp.value) || 0));
+  });
+  updateRequestedDateMin();
 }
 
 
@@ -152,11 +213,6 @@ function onCurrencyChange(){
 async function updatePendingBadge(){
   const el = document.getElementById('queued-orders-count');
   if(!el) return;
-  if(demoMode){
-    const queuedStatuses = ['pending', 'confirmed', 'production'];
-    el.textContent = orders.filter(o => queuedStatuses.includes(o.status)).length;
-    return;
-  }
   try{
     const result = await callListOrders('pendingCount', {});
     el.textContent = result.count;
@@ -194,7 +250,27 @@ function renderOrderFormVisibility(){
   document.getElementById('orders-closed-panel').style.display = ordersOpen ? 'none' : 'block';
 }
 
-/* ---------- Demo data (local preview only, never touches Supabase) ---------- */
+/* Compact version of estimatedReadyHtml (seller-orders.js) for the buyer's
+   own ticket — same underlying calculation, lighter styling to match the
+   ticket's look, and no per-material breakdown table (buyers see that
+   detail already, per material, on the order form itself before they
+   submit — this is just "where does my placed order actually stand"). */
+function buyerEstimatedReadyHtml(order){
+  const est = estimateOrderReady(order);
+  if(!est){
+    return `<div class="buyer-estimate buyer-estimate-loading">Estimated ready: loading…</div>`;
+  }
+  const { maxDays, unknown } = est;
+  if(unknown){
+    return `<div class="buyer-estimate buyer-estimate-unknown">Estimated ready: not available yet for this order.</div>`;
+  }
+  if(maxDays <= 0){
+    return `<div class="buyer-estimate buyer-estimate-ready">Estimated ready: materials already in stock.</div>`;
+  }
+  const rounded = Math.ceil(maxDays * 10) / 10;
+  return `<div class="buyer-estimate buyer-estimate-days">Estimated ready: ~${rounded} day${rounded !== 1 ? 's' : ''}</div>`;
+}
+
 function buildBuyerTicketElement(order){
   const cur = order.currency || 'NCC';
   const ticket = document.createElement('div');
@@ -218,6 +294,7 @@ function buildBuyerTicketElement(order){
         <div class="ticket-customer">${escapeHtml(order.customerName)}</div>
         ${order.username ? `<div class="ticket-note">User: ${escapeHtml(order.username)}</div>` : ''}
         ${order.pickupLocation ? `<div class="ticket-note">Pickup: ${escapeHtml(order.pickupLocation)}</div>` : ''}
+        ${order.requestedDate ? `<div class="ticket-note">Requested arrival: ${escapeHtml(order.requestedDate)}</div>` : ''}
       </div>
       <div style="text-align:right;">
         <div class="ticket-date">${dateStr}</div>
@@ -229,6 +306,7 @@ function buildBuyerTicketElement(order){
     ${orderTimelineHtml(order)}
     ${progressBadgeHtml(order)}
     ${physicalsBarHtml(order)}
+    ${(order.status !== 'delivered' && order.status !== 'denied') ? buyerEstimatedReadyHtml(order) : ''}
     <div class="ticket-body">
       <table>
         <thead><tr><th>Material</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Subtotal</th><th class="num">Produced</th><th class="num">% Ready</th></tr></thead>
@@ -285,18 +363,13 @@ async function checkOrderStatus(){
     return;
   }
   let data;
-  if(demoMode){
-    const order = orders.find(o => o.id.slice(-6).toUpperCase() === code) || null;
-    data = { order };
-  }else{
-    showSpinner(result, 'Looking up ticket…');
-    try{
-      data = await callListOrders('lookupByTicket', { ticketCode: code });
-    }catch(e){
-      console.error('Ticket lookup failed:', e);
-      result.innerHTML = '<div class="empty-state">Could not look that up right now — try again shortly.</div>';
-      return;
-    }
+  showSpinner(result, 'Looking up ticket…');
+  try{
+    data = await callListOrders('lookupByTicket', { ticketCode: code });
+  }catch(e){
+    console.error('Ticket lookup failed:', e);
+    result.innerHTML = '<div class="empty-state">Could not look that up right now — try again shortly.</div>';
+    return;
   }
   updatePendingBadge();
   if(!data.order){
@@ -304,7 +377,7 @@ async function checkOrderStatus(){
     return;
   }
   result.innerHTML = '';
-  result.appendChild(buildBuyerTicketElement(demoMode ? data.order : dbToOrder(data.order)));
+  result.appendChild(buildBuyerTicketElement(dbToOrder(data.order)));
 }
 
 async function findOrdersByCompanyCode(){
@@ -316,23 +389,16 @@ async function findOrdersByCompanyCode(){
     return;
   }
   let matches;
-  if(demoMode){
-    matches = orders
-      .filter(o => o.customerName.trim().toLowerCase() === code.toLowerCase())
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 10);
-  }else{
-    showSpinner(result, 'Looking up orders…');
-    let data;
-    try{
-      data = await callListOrders('lookupByCompany', { companyCode: code });
-    }catch(e){
-      console.error('Company lookup failed:', e);
-      result.innerHTML = '<div class="empty-state">Could not look that up right now — try again shortly.</div>';
-      return;
-    }
-    matches = (data.orders || []).map(dbToOrder);
+  showSpinner(result, 'Looking up orders…');
+  let data;
+  try{
+    data = await callListOrders('lookupByCompany', { companyCode: code });
+  }catch(e){
+    console.error('Company lookup failed:', e);
+    result.innerHTML = '<div class="empty-state">Could not look that up right now — try again shortly.</div>';
+    return;
   }
+  matches = (data.orders || []).map(dbToOrder);
   updatePendingBadge();
   if(matches.length === 0){
     result.innerHTML = '<div class="empty-state">No orders found for that company code.</div>';
@@ -424,6 +490,7 @@ async function submitOrder(){
     contact: document.getElementById('order-contact').value.trim(),
     note: document.getElementById('order-note').value.trim(),
     pickupLocation: document.getElementById('pickup-location-select').value,
+    requestedDate: document.getElementById('requested-date-input').value || null,
     items,
     total,
     currency: selectedCurrency,
@@ -449,18 +516,6 @@ let duplicateOverrideConfirmed = false;
 
 async function findRecentDuplicateOrder(order){
   const materialIds = order.items.map(i => i.materialId);
-  if(demoMode){
-    const codeLower = order.customerName.trim().toLowerCase();
-    if(!codeLower || codeLower === 'unnamed customer') return null;
-    const wantedIds = [...new Set(materialIds)].sort().join(',');
-    const cutoff = Date.now() - (2 * 60 * 1000);
-    return orders.find(o => {
-      if(o.customerName.trim().toLowerCase() !== codeLower) return false;
-      if(new Date(o.createdAt).getTime() < cutoff) return false;
-      const existingIds = [...new Set(o.items.map(i => i.materialId))].sort().join(',');
-      return existingIds === wantedIds;
-    }) || null;
-  }
   try{
     const data = await callListOrders('checkDuplicate', { companyCode: order.customerName, materialIds });
     return data.duplicate ? dbToOrder(data.duplicate) : null;
@@ -531,6 +586,7 @@ function showOrderConfirmation(order){
           <div class="ticket-customer">${escapeHtml(order.customerName)}</div>
           ${order.username ? `<div class="ticket-note">User: ${escapeHtml(order.username)}</div>` : ''}
           ${order.pickupLocation ? `<div class="ticket-note">Pickup: ${escapeHtml(order.pickupLocation)}</div>` : ''}
+          ${order.requestedDate ? `<div class="ticket-note">Requested arrival: ${escapeHtml(order.requestedDate)}</div>` : ''}
         </div>
         <div style="text-align:right;">
           <span class="status-badge status-pending">pending</span>

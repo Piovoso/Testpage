@@ -10,7 +10,6 @@ function hideConnectionError(){
 }
 
 async function sbFetch(path, options = {}){
-  if(demoMode) return null;
   let res;
   try{
     res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -58,12 +57,12 @@ function dbToOrder(row){
     productionAt: row.production_at || null,
     deliveredAt: row.delivered_at || null,
     deniedAt: row.denied_at || null,
-    orderDiscountPercent: Number(row.order_discount_percent) || 0
+    orderDiscountPercent: Number(row.order_discount_percent) || 0,
+    requestedDate: row.requested_date || null
   };
 }
 
 async function loadMaterials(){
-  if(demoMode) return;
   try{
     const rows = await sbFetch('materials?select=*&order=sort_order.asc');
     materials = (rows || []).map(r => ({
@@ -96,7 +95,6 @@ async function loadMaterials(){
    the whole orders table into the browser anymore. */
 
 async function loadDropdownOptions(){
-  if(demoMode) return;
   try{
     const rows = await sbFetch('dropdown_options?select=*&order=list_type.asc,sort_order.asc');
     const pickups = (rows || []).filter(r => r.list_type === 'pickup').map(r => r.value);
@@ -119,14 +117,6 @@ async function saveDropdownList(listType, values){
    used for the client's own optimistic display; the server never
    trusts it. */
 async function insertOrder(order, turnstileToken){
-  if(demoMode){
-    // No real materials table to price against here — just accept the
-    // order's own numbers as-is and add it to the local demo list,
-    // matching what the rest of demo mode already does everywhere else.
-    const fakeOrder = { ...order, id: uid('demo_ord'), status: 'pending', sellerComment: '', handledBy: '', createdAt: new Date().toISOString() };
-    orders.unshift(fakeOrder);
-    return fakeOrder;
-  }
   const res = await fetch(`${SUPABASE_URL}/functions/v1/submit-order`, {
     method: 'POST',
     headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
@@ -136,6 +126,7 @@ async function insertOrder(order, turnstileToken){
       contact: order.contact,
       note: order.note,
       pickupLocation: order.pickupLocation,
+      requestedDate: order.requestedDate || null,
       items: order.items.map(i => ({ materialId: i.materialId, qty: i.qty })),
       currency: order.currency,
       sourcePlans: order.sourcePlans || [],

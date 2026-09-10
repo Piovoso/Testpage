@@ -11,7 +11,6 @@ let accounts = []; // cached list of accounts, populated via the manage-account 
 let permissions = { orders: true, statistics: true, materials: true, settings: true, access: false };
 let selectedCurrency = 'NCC';
 let ordersOpen = true;
-let demoMode = false;
 let currencyOptions = ['NCC', 'ICA', 'CIS', 'AIC'];
 let pickupLocations = ['Moria', 'Hortus', 'Benten'];
 

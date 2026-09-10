@@ -17,22 +17,9 @@ async function ensureMaterialQueueLoaded(){
    rate). Each material's own demand is scoped to this order's position in
    the queue (via estimateMaterialDays' uptoOrderId) — an order placed
    earlier doesn't wait on orders placed behind it for the same material. */
-function estimateOrderReady(order){
-  if(!materialQueueCache) return null;
-  let maxDays = 0;
-  let unknown = false;
-  const perMaterial = order.items.map(it => {
-    const est = estimateMaterialDays(it.materialId, order.id, 0);
-    if(est.days > maxDays) maxDays = est.days;
-    if(est.unknown) unknown = true;
-    return { name: it.name, ...est };
-  });
-  return { maxDays, unknown, perMaterial };
-}
-
-/* Renders the section built on estimateOrderReady() above. Shown for any
-   active order (not delivered/denied), hidden while editing quantities
-   since the numbers would be mid-change and misleading. */
+/* Renders the section built on estimateOrderReady() (utils.js) above.
+   Shown for any active order (not delivered/denied), hidden while
+   editing quantities since the numbers would be mid-change and misleading. */
 function estimatedReadyHtml(order){
   const est = estimateOrderReady(order);
   if(!est){
@@ -98,59 +85,31 @@ async function renderOrdersList(){
   const isSearching = orderSearchTerm.trim().length > 0;
   let pageOrders;
 
-  if(demoMode){
-    let baseList;
-    if(isSearching){
-      const term = orderSearchTerm.trim().toLowerCase();
-      baseList = orders.filter(o =>
-        o.id.slice(-6).toLowerCase().includes(term) ||
-        o.customerName.toLowerCase().includes(term) ||
-        (o.username || '').toLowerCase().includes(term)
-      );
-    }else{
-      baseList = orders.filter(o => o.status === orderStatusFilter);
-    }
-    const sorted = [...baseList].sort((a, b) => {
-      const diff = new Date(b.createdAt) - new Date(a.createdAt);
-      return orderSortDirection === 'desc' ? diff : -diff;
+  showSpinner(list, 'Loading orders…');
+  let result;
+  try{
+    result = await callListOrders('sellerList', {
+      status: orderStatusFilter,
+      search: orderSearchTerm.trim(),
+      sort: orderSortDirection,
+      limit: ordersPageSize,
+      offset: (ordersCurrentPage - 1) * ordersPageSize
     });
-    ordersTotalCount = sorted.length;
-    const offset = (ordersCurrentPage - 1) * ordersPageSize;
-    pageOrders = sorted.slice(offset, offset + ordersPageSize);
-
-    ['pending', 'confirmed', 'production', 'delivered', 'denied'].forEach(s => {
-      const tabBtn = document.querySelector(`#order-filter-tabs [data-status-filter="${s}"]`);
-      if(tabBtn) tabBtn.classList.toggle('active', !isSearching && s === orderStatusFilter);
-      const countEl = document.getElementById('filter-count-' + s);
-      if(countEl) countEl.textContent = '(' + orders.filter(o => o.status === s).length + ')';
-    });
-  }else{
-    showSpinner(list, 'Loading orders…');
-    let result;
-    try{
-      result = await callListOrders('sellerList', {
-        status: orderStatusFilter,
-        search: orderSearchTerm.trim(),
-        sort: orderSortDirection,
-        limit: ordersPageSize,
-        offset: (ordersCurrentPage - 1) * ordersPageSize
-      });
-    }catch(e){
-      console.error('Could not load orders:', e);
-      list.innerHTML = `<div class="empty-state">Could not load orders — check the browser console for details.</div>`;
-      return;
-    }
-    pageOrders = (result.orders || []).map(dbToOrder);
-    orders = pageOrders;
-    ordersTotalCount = result.totalCount || 0;
-
-    ['pending', 'confirmed', 'production', 'delivered', 'denied'].forEach(s => {
-      const tabBtn = document.querySelector(`#order-filter-tabs [data-status-filter="${s}"]`);
-      if(tabBtn) tabBtn.classList.toggle('active', !isSearching && s === orderStatusFilter);
-      const countEl = document.getElementById('filter-count-' + s);
-      if(countEl) countEl.textContent = '(' + (result.counts && result.counts[s] || 0) + ')';
-    });
+  }catch(e){
+    console.error('Could not load orders:', e);
+    list.innerHTML = `<div class="empty-state">Could not load orders — check the browser console for details.</div>`;
+    return;
   }
+  pageOrders = (result.orders || []).map(dbToOrder);
+  orders = pageOrders;
+  ordersTotalCount = result.totalCount || 0;
+
+  ['pending', 'confirmed', 'production', 'delivered', 'denied'].forEach(s => {
+    const tabBtn = document.querySelector(`#order-filter-tabs [data-status-filter="${s}"]`);
+    if(tabBtn) tabBtn.classList.toggle('active', !isSearching && s === orderStatusFilter);
+    const countEl = document.getElementById('filter-count-' + s);
+    if(countEl) countEl.textContent = '(' + (result.counts && result.counts[s] || 0) + ')';
+  });
 
   filterTabsEl.style.opacity = isSearching ? '0.45' : '1';
   subText.textContent = isSearching
@@ -227,7 +186,7 @@ function renderOrderDetail(){
   const dateStr = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   const cur = order.currency || 'NCC';
 
-  if(!demoMode) ensureMaterialQueueLoaded(); // fire-and-forget; guarded, cheap after the first call
+  ensureMaterialQueueLoaded(); // fire-and-forget; guarded, cheap after the first call
 
   let stampHtml = '';
   if(order.status === 'confirmed') stampHtml = '<div class="stamp">CONFIRMED</div>';
@@ -354,6 +313,7 @@ function renderOrderDetail(){
           <div class="odc-value">${escapeHtml(order.pickupLocation || '—')}</div>
         </div>
         ${order.contact ? `<div class="odc-subtext">Discord: ${escapeHtml(order.contact)}</div>` : ''}
+        ${order.requestedDate ? `<div class="odc-subtext">Requested arrival: ${escapeHtml(order.requestedDate)}</div>` : ''}
       </div>
 
       <div class="odc-section">
@@ -421,16 +381,22 @@ function renderOrderDetail(){
         </div>
       ` : ''}
 
-      ${order.note ? `
+      ${(order.note || order.sellerComment) ? `
         <div class="odc-section">
           <div class="odc-section-label">Customer Note</div>
-          <div class="odc-note">"${escapeHtml(order.note)}"</div>
+          ${order.note ? `<div class="odc-note">"${escapeHtml(order.note)}"</div>` : ''}
+          ${order.sellerComment ? `
+            <div class="odc-reply">
+              <span class="odc-reply-tag">Your reply</span>
+              ${escapeHtml(order.sellerComment)}
+            </div>
+          ` : ''}
         </div>
       ` : ''}
 
       <div class="odc-section">
         <div class="odc-section-label">Reply to Customer</div>
-        <textarea data-comment-input="${order.id}" placeholder="e.g. Backordered on rebar, ETA Friday.">${escapeHtml(order.sellerComment || '')}</textarea>
+        <textarea data-comment-input="${order.id}" placeholder="e.g. Backordered on rebar, ETA Friday."></textarea>
         <div class="comment-actions">
           <button class="btn btn-ghost btn-small" data-save-comment="${order.id}">Save Comment</button>
           <span class="toast" id="comment-toast-${order.id}"></span>
@@ -635,24 +601,10 @@ async function saveSellerOrderEdit(order){
   const newPickup = pickupInp ? pickupInp.value : order.pickupLocation;
   try{
     const result = await callManageOrder('editQuantities', { id: order.id, items: newItems, currency: newCurrency, pickupLocation: newPickup });
-    if(demoMode){
-      const updated = newItems.map(ni => {
-        const existing = order.items.find(it => it.materialId === ni.materialId);
-        const producedQty = Math.min(ni.qty, Number(existing?.producedQty) || 0);
-        return { materialId: ni.materialId, name: existing?.name || ni.materialId, qty: ni.qty, price: existing?.price || 0, subtotal: +(ni.qty * (existing?.price || 0)).toFixed(2), producedQty };
-      });
-      order.items = updated;
-      const rawSum = updated.reduce((s, i) => s + i.subtotal, 0);
-      const discount = Math.min(100, Math.max(0, Number(order.orderDiscountPercent) || 0));
-      order.total = +(rawSum * (1 - discount / 100)).toFixed(2);
-      order.currency = newCurrency;
-      order.pickupLocation = newPickup;
-    }else{
-      order.items = result.items;
-      order.total = result.total;
-      order.currency = result.currency;
-      order.pickupLocation = result.pickupLocation;
-    }
+    order.items = result.items;
+    order.total = result.total;
+    order.currency = result.currency;
+    order.pickupLocation = result.pickupLocation;
     editingOrderId = null;
     delete pendingNewOrderItems[order.id];
     materialQueueCache = null; // quantities/materials changed — outstanding demand did too
@@ -692,8 +644,10 @@ async function saveOrderComment(id, text){
   try{
     await callManageOrder('saveComment', { id, comment: text.trim() });
     order.sellerComment = text.trim();
-    if(toast){
-      setToastSuccess(toast, 'Saved.', 2000);
+    renderOrderDetail(); // clears the reply box and shows it threaded under the customer's note
+    const freshToast = document.getElementById('comment-toast-' + id);
+    if(freshToast){
+      setToastSuccess(freshToast, 'Saved.', 2000);
     }
   }catch(e){
     console.error(e);
@@ -738,15 +692,7 @@ async function saveOrderProgress(order){
   });
   try{
     const result = await callManageOrder('saveProduction', { id: order.id, produced });
-    if(demoMode){
-      order.items = order.items.map(it => {
-        const raw = produced[it.materialId];
-        if(raw === undefined) return it;
-        return { ...it, producedQty: Math.max(0, Math.min(it.qty, raw)) };
-      });
-    }else{
-      order.items = result.items;
-    }
+    order.items = result.items;
     if(toast){
       setToastSuccess(toast, 'Saved.', 2000);
     }
@@ -787,7 +733,6 @@ function armDeleteButton(btn, action){
 async function deleteOrder(id){
   try{
     await callManageOrder('deleteOrder', { id });
-    if(demoMode) orders = orders.filter(o => o.id !== id);
     if(selectedOrderId === id) selectedOrderId = null;
     renderOrdersList();
     updatePendingBadge();
@@ -921,12 +866,7 @@ async function autoSaveOrderDiscount(order){
   try{
     const result = await callManageOrder('updateOrderDiscount', { id: order.id, discountPercent });
     order.orderDiscountPercent = discountPercent;
-    if(demoMode){
-      const rawSum = order.items.reduce((s, i) => s + i.subtotal, 0);
-      order.total = +(rawSum * (1 - discountPercent / 100)).toFixed(2);
-    }else{
-      order.total = result.total;
-    }
+    order.total = result.total;
     const totalEl = document.getElementById(`seller-edit-total-${order.id}`);
     if(totalEl) totalEl.textContent = money(order.total, order.currency || 'NCC');
     setToastSuccess(toast, 'Saved.', 1500);

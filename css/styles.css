@@ -46,7 +46,7 @@
     overflow-x: hidden;
   }
   .wrap{
-    max-width: 880px;
+    max-width: 955px;
     margin: 0 auto;
     padding: 28px 20px 80px;
   }
@@ -248,7 +248,16 @@
     color: var(--ink-soft);
     margin-bottom: 5px;
   }
-  input[type="text"], input[type="password"], textarea, .field-grid select{
+  .field-hint{
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+    min-height: 14px;
+  }
+  .field-hint.field-hint-warning{
+    color: var(--rust);
+  }
+  input[type="text"], input[type="password"], input[type="date"], textarea, .field-grid select{
     width: 100%;
     padding: 9px 10px;
     border: 1px solid var(--line);
@@ -714,25 +723,6 @@
     font-size: 12.5px;
     letter-spacing: 0.5px;
   }
-  .demo-mode-banner{
-    width: 100%;
-    background: var(--rust);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    padding: 9px 20px;
-    font-family: var(--mono);
-    font-size: 12.5px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-  }
-  .demo-mode-banner .btn{
-    background: white;
-    color: var(--rust);
-    padding: 5px 12px;
-  }
 
   .connection-error-banner{
     width: 100%;
@@ -1066,6 +1056,25 @@
     border-left: 3px solid var(--accent);
     padding: 10px 12px;
     border-radius: 3px;
+  }
+  .odc-reply{
+    font-size: 13px;
+    color: var(--ink);
+    background: var(--paper-deep);
+    border-left: 3px solid var(--ok);
+    padding: 10px 12px;
+    border-radius: 3px;
+    margin-top: 8px;
+    margin-left: 20px;
+  }
+  .odc-reply-tag{
+    display:block;
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ok);
+    margin-bottom: 4px;
   }
 
   .odc-latest-activity{ display:flex; align-items:center; font-size: 13px; color: var(--ink); }
@@ -1647,6 +1656,15 @@
     display:block;
     margin-bottom: 4px;
   }
+
+  .buyer-estimate{
+    padding: 10px 20px;
+    font-size: 12.5px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .buyer-estimate-days{ color: var(--ink); }
+  .buyer-estimate-ready{ color: var(--ok); font-weight: 600; }
+  .buyer-estimate-unknown, .buyer-estimate-loading{ color: var(--ink-soft); }
 
   .buyer-note-display{
     background: var(--paper-deep);

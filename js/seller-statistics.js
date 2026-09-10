@@ -4,30 +4,49 @@ async function renderStatistics(){
   const statusGrid = document.getElementById('status-stats-grid');
   if(!statusGrid) return;
 
+  const queueGrid = document.getElementById('queue-length-stat');
+  if(queueGrid){
+    await ensureMaterialQueueLoaded();
+    const perMaterialTotals = {};
+    (materialQueueCache || []).forEach(o => {
+      o.items.forEach(it => {
+        perMaterialTotals[it.materialId] = (perMaterialTotals[it.materialId] || 0) + it.remaining;
+      });
+    });
+    const rows = Object.entries(perMaterialTotals)
+      .filter(([, qty]) => qty > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([materialId, qty]) => {
+        const mat = materials.find(m => m.id === materialId);
+        const est = estimateMaterialDays(materialId, null, 0);
+        const estText = !est ? '—' : est.unknown ? 'no rate set' : (est.days <= 0 ? 'covered' : `~${Math.ceil(est.days * 10) / 10}d`);
+        return `
+          <tr>
+            <td>${materialTickerChip(mat ? mat.name : materialId, mat ? mat.category : null)}</td>
+            <td class="num">${qty}</td>
+            <td class="num">${mat ? (mat.stockpile || 0) : 0}</td>
+            <td class="num">${mat ? (mat.productionPerDay || 0) : 0}</td>
+            <td class="num">${estText}</td>
+          </tr>
+        `;
+      }).join('');
+    queueGrid.innerHTML = rows ? `
+      <table class="odc-table">
+        <thead><tr><th>Material</th><th class="num">Queue Qty</th><th class="num">Stockpile</th><th class="num">Rate/Day</th><th class="num">Est.</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    ` : `<div class="empty-state">Nothing currently queued.</div>`;
+  }
+
   let statusCounts, currencyTotals;
-  if(demoMode){
-    statusCounts = {};
-    ['pending', 'confirmed', 'production', 'delivered', 'denied'].forEach(s => {
-      statusCounts[s] = orders.filter(o => o.status === s).length;
-    });
-    currencyTotals = {};
-    const moneyStatuses = ['pending', 'confirmed', 'production', 'delivered'];
-    orders.forEach(o => {
-      if(!moneyStatuses.includes(o.status)) return;
-      const cur = o.currency || 'NCC';
-      if(!currencyTotals[cur]) currencyTotals[cur] = { pending: 0, confirmed: 0, production: 0, delivered: 0 };
-      currencyTotals[cur][o.status] += o.total;
-    });
-  }else{
-    try{
-      const result = await callListOrders('sellerStats', {});
-      statusCounts = result.statusCounts;
-      currencyTotals = result.currencyTotals;
-    }catch(e){
-      console.error('Could not load statistics:', e);
-      statusGrid.innerHTML = '<div class="empty-state">Could not load statistics — check the browser console for details.</div>';
-      return;
-    }
+  try{
+    const result = await callListOrders('sellerStats', {});
+    statusCounts = result.statusCounts;
+    currencyTotals = result.currencyTotals;
+  }catch(e){
+    console.error('Could not load statistics:', e);
+    statusGrid.innerHTML = '<div class="empty-state">Could not load statistics — check the browser console for details.</div>';
+    return;
   }
 
   const statusOrder = ['pending', 'confirmed', 'production', 'delivered', 'denied'];

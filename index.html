@@ -32,10 +32,6 @@
   <span>We're having trouble connecting to the server. Some things may not load or save right now — try again shortly.</span>
   <button class="btn btn-small" id="connection-retry-btn">Retry</button>
 </div>
-<div class="demo-mode-banner" id="demo-mode-banner" style="display:none;">
-  <span>DEMO MODE — sample data only, nothing here is saved.</span>
-  <button class="btn btn-small" id="exit-demo-btn">Exit Demo Mode</button>
-</div>
 <div class="site-note-banner" id="site-note-banner" style="display:none;">
   <span id="site-note-text"></span>
 </div>
@@ -121,6 +117,11 @@
             <option value="Hortus">Hortus</option>
             <option value="Benten">Benten</option>
           </select>
+        </div>
+        <div>
+          <label class="field-label" title="Optional. Can't be earlier than what the current queue and production rates realistically allow — updates as you add materials below.">Requested Arrival (optional)</label>
+          <input type="date" id="requested-date-input">
+          <div class="field-hint" id="requested-date-hint"></div>
         </div>
         <div class="full">
           <label class="field-label">Note</label>
@@ -294,6 +295,12 @@
           <div class="acc-title-row" data-acc-toggle><span class="acc-caret">▶</span><h2>Orders by Status</h2></div>
           <div class="acc-desc">Live counts across every order in the system.</div>
           <div class="stats-grid" id="status-stats-grid"></div>
+        </div>
+
+        <div class="panel">
+          <div class="acc-title-row" data-acc-toggle><span class="acc-caret">▶</span><h2>Material Queue</h2></div>
+          <div class="acc-desc">How many orders are currently active and waiting to be fulfilled.</div>
+          <div id="queue-length-stat"></div>
         </div>
 
         <div class="panel">
@@ -522,11 +529,6 @@
           <span class="toast" id="password-toast"></span>
         </div>
 
-        <div class="panel">
-          <div class="acc-title-row" data-acc-toggle><span class="acc-caret">▶</span><h2>Demo Data</h2></div>
-          <div class="acc-desc">Fills the page with sample orders and materials to preview styling. This never touches your real Supabase data — nothing is saved.</div>
-          <button class="btn btn-ghost btn-small" id="load-demo-btn">Load Demo Data</button>
-        </div>
       </div>
 
     </div>
@@ -547,7 +549,6 @@
 <script src="js/utils.js"></script>
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/demo.js"></script>
 <script src="js/buyer.js"></script>
 <script src="js/prun-import.js"></script>
 <script src="js/seller-materials.js"></script>

@@ -264,6 +264,26 @@ function estimateMaterialDays(materialId, uptoOrderId, extraQty){
   return { totalDemand, stockpile, rate, shortfall, days, unknown };
 }
 
+/* Order isn't ready until every material in it is — the estimate is
+   whichever material finishes last, not a sum across different materials
+   (they're usually different production lines/recipes, not one combined
+   rate). Each material's own demand is scoped to this order's position in
+   the queue — an order placed earlier doesn't wait on orders placed
+   behind it for the same material. Shared by the seller's order detail
+   card and the buyer's "Check Order Status" ticket. */
+function estimateOrderReady(order){
+  if(!materialQueueCache) return null;
+  let maxDays = 0;
+  let unknown = false;
+  const perMaterial = order.items.map(it => {
+    const est = estimateMaterialDays(it.materialId, order.id, 0);
+    if(est.days > maxDays) maxDays = est.days;
+    if(est.unknown) unknown = true;
+    return { name: it.name, ...est };
+  });
+  return { maxDays, unknown, perMaterial };
+}
+
 function materialTickerChip(name, category){
   const key = (category || '').toLowerCase().trim();
   const color = MATERIAL_CATEGORY_COLORS[key] || MATERIAL_CATEGORY_DEFAULT_COLOR;
