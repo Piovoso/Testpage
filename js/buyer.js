@@ -291,7 +291,7 @@ function buildBuyerTicketElement(order){
     <div class="ticket-head">
       <div>
         <div class="ticket-id">TICKET #${order.id.slice(-6).toUpperCase()}</div>
-        <div class="ticket-customer">${escapeHtml(order.customerName)}</div>
+        <div class="ticket-customer">${escapeHtml(order.customerName.toUpperCase())}</div>
         ${order.username ? `<div class="ticket-note">User: ${escapeHtml(order.username)}</div>` : ''}
         ${order.pickupLocation ? `<div class="ticket-note">Pickup: ${escapeHtml(order.pickupLocation)}</div>` : ''}
         ${order.requestedDate ? `<div class="ticket-note">Requested arrival: ${escapeHtml(order.requestedDate)}</div>` : ''}
@@ -583,7 +583,7 @@ function showOrderConfirmation(order){
       <div class="ticket-head">
         <div>
           <div class="ticket-id">TICKET #${order.id.slice(-6).toUpperCase()}</div>
-          <div class="ticket-customer">${escapeHtml(order.customerName)}</div>
+          <div class="ticket-customer">${escapeHtml(order.customerName.toUpperCase())}</div>
           ${order.username ? `<div class="ticket-note">User: ${escapeHtml(order.username)}</div>` : ''}
           ${order.pickupLocation ? `<div class="ticket-note">Pickup: ${escapeHtml(order.pickupLocation)}</div>` : ''}
           ${order.requestedDate ? `<div class="ticket-note">Requested arrival: ${escapeHtml(order.requestedDate)}</div>` : ''}

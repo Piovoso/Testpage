@@ -30,6 +30,21 @@ function showSellerSubtab(name){
   if(name === 'statistics') renderStatistics();
 }
 
+/* Wires an event listener the same as element.addEventListener(event,
+   handler), but never throws if the element doesn't exist. A single
+   missing element (e.g. index.html out of sync with a newer main.js after
+   a partial deploy) used to throw and silently abort every wiring call
+   after it in init() — meaning one missing button broke every other
+   button on the page. This logs a clear warning instead and keeps going. */
+function safeBind(id, event, handler){
+  const el = document.getElementById(id);
+  if(!el){
+    console.warn(`safeBind: no element #${id} found — skipping its "${event}" handler. This usually means index.html and the JS files are out of sync (a partial deploy).`);
+    return;
+  }
+  el.addEventListener(event, handler);
+}
+
 async function init(){
   initTheme();
   applySiteTitle(await loadSiteTitle());
@@ -61,8 +76,8 @@ async function init(){
   }catch(e){}
   await trySilentSessionRestore();
 
-  document.getElementById('tab-order').addEventListener('click', () => showTab('order'));
-  document.getElementById('theme-toggle-btn').addEventListener('click', toggleTheme);
+  safeBind('tab-order', 'click', () => showTab('order'));
+  safeBind('theme-toggle-btn', 'click', toggleTheme);
   enhanceNumberInput(document.getElementById('contract-days-input'), 'stacked');
   enhanceNumberInput(document.getElementById('auto-logout-minutes-input'), 'stacked');
   document.querySelectorAll('[data-acc-toggle]').forEach(row => {
@@ -82,38 +97,38 @@ async function init(){
       if(caret) caret.classList.toggle('open', isOpen);
     });
   });
-  document.getElementById('tab-status').addEventListener('click', () => showTab('status'));
-  document.getElementById('tab-seller').addEventListener('click', () => showTab('seller'));
-  document.getElementById('submit-order-btn').addEventListener('click', submitOrder);
-  document.getElementById('clear-order-btn').addEventListener('click', clearOrderClick);
+  safeBind('tab-status', 'click', () => showTab('status'));
+  safeBind('tab-seller', 'click', () => showTab('seller'));
+  safeBind('submit-order-btn', 'click', submitOrder);
+  safeBind('clear-order-btn', 'click', clearOrderClick);
   ['order-username', 'order-name', 'order-contact', 'order-note'].forEach(id => {
     document.getElementById(id).addEventListener('input', saveDraftOrder);
   });
   ['pickup-location-select', 'currency-select'].forEach(id => {
     document.getElementById(id).addEventListener('change', saveDraftOrder);
   });
-  document.getElementById('duplicate-submit-anyway-btn').addEventListener('click', () => {
+  safeBind('duplicate-submit-anyway-btn', 'click', () => {
     duplicateOverrideConfirmed = true;
     submitOrder();
   });
-  document.getElementById('duplicate-cancel-btn').addEventListener('click', () => {
+  safeBind('duplicate-cancel-btn', 'click', () => {
     duplicateOverrideConfirmed = false;
     hideDuplicateWarning();
   });
-  document.getElementById('prun-add-link-btn').addEventListener('click', addPrunLink);
-  document.getElementById('prun-link-input').addEventListener('keydown', e => {
+  safeBind('prun-add-link-btn', 'click', addPrunLink);
+  safeBind('prun-link-input', 'keydown', e => {
     if(e.key === 'Enter') addPrunLink();
   });
-  document.getElementById('add-material-btn').addEventListener('click', addMaterial);
-  document.getElementById('add-pickup-option-btn').addEventListener('click', addPickupOption);
-  document.getElementById('save-pickup-options-btn').addEventListener('click', () => saveOptionListClick('pickup'));
-  document.getElementById('add-currency-option-btn').addEventListener('click', addCurrencyOption);
-  document.getElementById('save-currency-options-btn').addEventListener('click', () => saveOptionListClick('currency'));
-  document.getElementById('update-fio-weights-btn').addEventListener('click', updateWeightsFromFio);
-  document.getElementById('update-cx-prices-btn').addEventListener('click', updateCxPricesClick);
-  document.getElementById('materials-edit-toggle-btn').addEventListener('click', toggleMaterialsEditMode);
-  document.getElementById('save-prices-btn').addEventListener('click', savePricesClick);
-  document.getElementById('materials-tools-menu-btn').addEventListener('click', (e) => {
+  safeBind('add-material-btn', 'click', addMaterial);
+  safeBind('add-pickup-option-btn', 'click', addPickupOption);
+  safeBind('save-pickup-options-btn', 'click', () => saveOptionListClick('pickup'));
+  safeBind('add-currency-option-btn', 'click', addCurrencyOption);
+  safeBind('save-currency-options-btn', 'click', () => saveOptionListClick('currency'));
+  safeBind('update-fio-weights-btn', 'click', updateWeightsFromFio);
+  safeBind('update-cx-prices-btn', 'click', updateCxPricesClick);
+  safeBind('materials-edit-toggle-btn', 'click', toggleMaterialsEditMode);
+  safeBind('save-prices-btn', 'click', savePricesClick);
+  safeBind('materials-tools-menu-btn', 'click', (e) => {
     e.stopPropagation();
     const menu = document.getElementById('materials-tools-menu');
     menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
@@ -122,56 +137,56 @@ async function init(){
     const menu = document.getElementById('materials-tools-menu');
     if(menu) menu.style.display = 'none';
   });
-  document.getElementById('save-cx-exchange-btn').addEventListener('click', saveDefaultCxExchangeClick);
-  document.getElementById('gate-submit-btn').addEventListener('click', attemptUnlock);
-  document.getElementById('gate-password-input').addEventListener('keydown', e => {
+  safeBind('save-cx-exchange-btn', 'click', saveDefaultCxExchangeClick);
+  safeBind('gate-submit-btn', 'click', attemptUnlock);
+  safeBind('gate-password-input', 'keydown', e => {
     if(e.key === 'Enter') attemptUnlock();
   });
-  document.getElementById('gate-name-input').addEventListener('keydown', e => {
+  safeBind('gate-name-input', 'keydown', e => {
     if(e.key === 'Enter') attemptUnlock();
   });
-  document.getElementById('change-admin-username-btn').addEventListener('click', changeAdminUsername);
-  document.getElementById('change-admin-password-btn').addEventListener('click', changeAdminPassword);
-  document.getElementById('add-employee-btn').addEventListener('click', addEmployeeClick);
-  document.getElementById('logout-btn').addEventListener('click', logout);
-  document.getElementById('currency-select').addEventListener('change', onCurrencyChange);
-  document.getElementById('order-name').addEventListener('input', (e) => {
+  safeBind('change-admin-username-btn', 'click', changeAdminUsername);
+  safeBind('change-admin-password-btn', 'click', changeAdminPassword);
+  safeBind('add-employee-btn', 'click', addEmployeeClick);
+  safeBind('logout-btn', 'click', logout);
+  safeBind('currency-select', 'change', onCurrencyChange);
+  safeBind('order-name', 'input', (e) => {
     e.target.value = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4);
   });
-  document.getElementById('save-notice-btn').addEventListener('click', saveNoticeClick);
-  document.getElementById('save-site-note-btn').addEventListener('click', saveSiteNoteClick);
-  document.getElementById('save-site-title-btn').addEventListener('click', saveSiteTitleClick);
-  document.getElementById('save-accent-color-btn').addEventListener('click', saveAccentColorClick);
-  document.getElementById('save-xit-origin-btn').addEventListener('click', saveXitOriginClick);
-  document.getElementById('save-contract-days-btn').addEventListener('click', saveContractDaysClick);
-  document.getElementById('save-auto-logout-btn').addEventListener('click', saveAutoLogoutClick);
-  document.getElementById('stay-logged-in-btn').addEventListener('click', stayLoggedInClick);
-  document.getElementById('reset-accent-color-btn').addEventListener('click', resetAccentColorClick);
-  document.getElementById('orders-open-toggle').addEventListener('change', onOrdersOpenToggle);
-  document.getElementById('connection-retry-btn').addEventListener('click', () => location.reload());
-  document.getElementById('status-check-btn').addEventListener('click', checkOrderStatus);
-  document.getElementById('status-check-input').addEventListener('keydown', e => {
+  safeBind('save-notice-btn', 'click', saveNoticeClick);
+  safeBind('save-site-note-btn', 'click', saveSiteNoteClick);
+  safeBind('save-site-title-btn', 'click', saveSiteTitleClick);
+  safeBind('save-accent-color-btn', 'click', saveAccentColorClick);
+  safeBind('save-xit-origin-btn', 'click', saveXitOriginClick);
+  safeBind('save-contract-days-btn', 'click', saveContractDaysClick);
+  safeBind('save-auto-logout-btn', 'click', saveAutoLogoutClick);
+  safeBind('stay-logged-in-btn', 'click', stayLoggedInClick);
+  safeBind('reset-accent-color-btn', 'click', resetAccentColorClick);
+  safeBind('orders-open-toggle', 'change', onOrdersOpenToggle);
+  safeBind('connection-retry-btn', 'click', () => location.reload());
+  safeBind('status-check-btn', 'click', checkOrderStatus);
+  safeBind('status-check-input', 'keydown', e => {
     if(e.key === 'Enter') checkOrderStatus();
   });
-  document.getElementById('company-lookup-btn').addEventListener('click', findOrdersByCompanyCode);
-  document.getElementById('company-lookup-input').addEventListener('keydown', e => {
+  safeBind('company-lookup-btn', 'click', findOrdersByCompanyCode);
+  safeBind('company-lookup-input', 'keydown', e => {
     if(e.key === 'Enter') findOrdersByCompanyCode();
   });
-  document.getElementById('order-filter-tabs').addEventListener('click', (e) => {
+  safeBind('order-filter-tabs', 'click', (e) => {
     const btn = e.target.closest('[data-status-filter]');
     if(btn) setOrderFilter(btn.dataset.statusFilter);
   });
-  document.getElementById('order-sort-select').addEventListener('change', (e) => setOrderSort(e.target.value));
-  document.getElementById('orders-prev-page-btn').addEventListener('click', () => goToOrdersPage(-1));
-  document.getElementById('orders-next-page-btn').addEventListener('click', () => goToOrdersPage(1));
-  document.getElementById('orders-page-size').addEventListener('change', (e) => setOrdersPageSize(Number(e.target.value)));
-  document.getElementById('order-search-input').addEventListener('input', (e) => setOrderSearch(e.target.value));
-  document.getElementById('seller-subtab-orders').addEventListener('click', () => showSellerSubtab('orders'));
-  document.getElementById('seller-subtab-statistics').addEventListener('click', () => showSellerSubtab('statistics'));
-  document.getElementById('seller-subtab-materials').addEventListener('click', () => showSellerSubtab('materials'));
-  document.getElementById('seller-subtab-settings').addEventListener('click', () => showSellerSubtab('settings'));
-  document.getElementById('seller-subtab-access').addEventListener('click', () => showSellerSubtab('access'));
-  document.getElementById('place-another-btn').addEventListener('click', returnToOrderForm);
+  safeBind('order-sort-select', 'change', (e) => setOrderSort(e.target.value));
+  safeBind('orders-prev-page-btn', 'click', () => goToOrdersPage(-1));
+  safeBind('orders-next-page-btn', 'click', () => goToOrdersPage(1));
+  safeBind('orders-page-size', 'change', (e) => setOrdersPageSize(Number(e.target.value)));
+  safeBind('order-search-input', 'input', (e) => setOrderSearch(e.target.value));
+  safeBind('seller-subtab-orders', 'click', () => showSellerSubtab('orders'));
+  safeBind('seller-subtab-statistics', 'click', () => showSellerSubtab('statistics'));
+  safeBind('seller-subtab-materials', 'click', () => showSellerSubtab('materials'));
+  safeBind('seller-subtab-settings', 'click', () => showSellerSubtab('settings'));
+  safeBind('seller-subtab-access', 'click', () => showSellerSubtab('access'));
+  safeBind('place-another-btn', 'click', returnToOrderForm);
   applyCooldownState();
 }
 init();

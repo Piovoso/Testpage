@@ -291,6 +291,7 @@ function materialTickerChip(name, category){
 }
 
 const STATUS_LABELS = {
+  all: '',
   pending: 'pending',
   confirmed: 'confirmed',
   production: 'production started',

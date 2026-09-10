@@ -110,6 +110,8 @@ async function renderOrdersList(){
     const countEl = document.getElementById('filter-count-' + s);
     if(countEl) countEl.textContent = '(' + (result.counts && result.counts[s] || 0) + ')';
   });
+  const allTabBtn = document.querySelector('#order-filter-tabs [data-status-filter="all"]');
+  if(allTabBtn) allTabBtn.classList.toggle('active', !isSearching && orderStatusFilter === 'all');
 
   filterTabsEl.style.opacity = isSearching ? '0.45' : '1';
   subText.textContent = isSearching
@@ -129,7 +131,7 @@ async function renderOrdersList(){
   if(pageOrders.length === 0){
     list.innerHTML = isSearching
       ? `<div class="empty-state">No orders match "${escapeHtml(orderSearchTerm.trim())}".</div>`
-      : `<div class="empty-state">No ${STATUS_LABELS[orderStatusFilter]} orders.</div>`;
+      : `<div class="empty-state">${orderStatusFilter === 'all' ? 'No orders yet.' : `No ${STATUS_LABELS[orderStatusFilter]} orders.`}</div>`;
     selectedOrderId = null;
   }else{
     if(!pageOrders.some(o => o.id === selectedOrderId)){
@@ -164,7 +166,7 @@ function buildOrderRowHtml(order){
   return `
     <div class="order-row ${isSelected ? 'selected' : ''}" data-select-order="${order.id}">
       <div class="row-id">#${order.id.slice(-6).toUpperCase()}</div>
-      <div class="row-company">${escapeHtml(order.username || '')} — ${escapeHtml(order.customerName)}</div>
+      <div class="row-company">${order.username ? `${escapeHtml(order.username)} | ` : ''}${escapeHtml(order.customerName.toUpperCase())}</div>
       <div class="row-meta"><span>${escapeHtml(order.pickupLocation || '')}</span><span>${dateStr}</span></div>
       <div class="row-bottom">
         <span class="status-badge status-${order.status}">${STATUS_LABELS[order.status]}</span>
@@ -293,12 +295,9 @@ function renderOrderDetail(){
   panel.innerHTML = `
     <div class="ticket odc">
       <div class="odc-header">
-        <div>
-          <div class="odc-id-row">
-            <span class="odc-id">#${order.id.slice(-6).toUpperCase()}</span>
-            <span class="odc-status-inline"><span class="dot ${order.status}"></span>${STATUS_LABELS[order.status].toUpperCase()}</span>
-          </div>
-          ${order.username ? `<div class="odc-username">${escapeHtml(order.username)}</div>` : ''}
+        <div class="odc-id-row">
+          <span class="odc-id">#${order.id.slice(-6).toUpperCase()}</span>
+          <span class="odc-status-inline"><span class="dot ${order.status}"></span>${STATUS_LABELS[order.status].toUpperCase()}</span>
         </div>
         <div style="text-align:right;">
           <div class="odc-total" id="seller-edit-total-${order.id}">${money(order.total, cur)}</div>
@@ -309,7 +308,7 @@ function renderOrderDetail(){
       <div class="odc-section">
         <div class="odc-section-label">Customer / Pickup</div>
         <div class="odc-two-col">
-          <div class="odc-value">${escapeHtml(order.customerName)}</div>
+          <div class="odc-value">${order.username ? `${escapeHtml(order.username)} | ` : ''}${escapeHtml(order.customerName.toUpperCase())}</div>
           <div class="odc-value">${escapeHtml(order.pickupLocation || '—')}</div>
         </div>
         ${order.contact ? `<div class="odc-subtext">Discord: ${escapeHtml(order.contact)}</div>` : ''}
