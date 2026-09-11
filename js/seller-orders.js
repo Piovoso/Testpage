@@ -306,10 +306,15 @@ function renderOrderDetail(){
       </div>
 
       <div class="odc-section">
-        <div class="odc-section-label">Customer / Pickup</div>
-        <div class="odc-two-col">
-          <div class="odc-value">${order.username ? `${escapeHtml(order.username)} | ` : ''}${escapeHtml(order.customerName.toUpperCase())}</div>
-          <div class="odc-value">${escapeHtml(order.pickupLocation || '—')}</div>
+        <div class="odc-cp-fields">
+          <div class="odc-cp-field">
+            <div class="odc-cp-cap">Customer</div>
+            <div class="odc-cp-val">${order.username ? `${escapeHtml(order.username)} | ` : ''}${escapeHtml(order.customerName.toUpperCase())}</div>
+          </div>
+          <div class="odc-cp-field">
+            <div class="odc-cp-cap">Pickup</div>
+            <div class="odc-cp-val">${escapeHtml(order.pickupLocation || '—')}</div>
+          </div>
         </div>
         ${order.contact ? `<div class="odc-subtext">Discord: ${escapeHtml(order.contact)}</div>` : ''}
         ${order.requestedDate ? `<div class="odc-subtext">Requested arrival: ${escapeHtml(order.requestedDate)}</div>` : ''}

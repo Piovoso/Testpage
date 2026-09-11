@@ -230,15 +230,25 @@ const MATERIAL_CATEGORY_DEFAULT_COLOR = "#3d4a4d"; // neutral gray for anything 
    a given order's own position (used for an order that's already placed,
    so it doesn't count orders behind it in line). Returns null if the
    queue hasn't loaded yet. */
+/* Sums outstanding need AND already-produced quantity for one material
+   across the active-order queue — everyone, if uptoOrderId is omitted
+   (used for a not-yet-placed order, which would join at the back of the
+   line), or only orders at-or-before a given order's own position (used
+   for an order that's already placed, so it doesn't count orders behind
+   it in line). Returns null if the queue hasn't loaded yet. */
 function cumulativeMaterialDemand(materialId, uptoOrderId){
   if(!materialQueueCache) return null;
-  let sum = 0;
+  let remaining = 0;
+  let produced = 0;
   for(const o of materialQueueCache){
     const item = o.items.find(it => it.materialId === materialId);
-    if(item) sum += item.remaining;
+    if(item){
+      remaining += item.remaining;
+      produced += item.produced;
+    }
     if(uptoOrderId && o.id === uptoOrderId) break;
   }
-  return sum;
+  return { remaining, produced };
 }
 
 /* Per-material estimated wait, shared by the buyer's order form and the
@@ -246,14 +256,20 @@ function cumulativeMaterialDemand(materialId, uptoOrderId){
    order's position (omit for a hypothetical new order); extraQty adds an
    amount on top — e.g. the buyer's own not-yet-submitted quantity — before
    comparing against that material's stockpile and production rate (both
-   seller-entered, manually). Returns null if the queue hasn't loaded yet. */
+   seller-entered, manually). Stockpile is a manually entered snapshot,
+   not automatically reduced as items get marked produced — so whatever's
+   already been produced toward the queue is subtracted from it here,
+   otherwise that stockpile would be counted as available twice: once
+   toward what's already done, and again toward what's still needed.
+   Returns null if the queue hasn't loaded yet. */
 function estimateMaterialDays(materialId, uptoOrderId, extraQty){
   const cumulative = cumulativeMaterialDemand(materialId, uptoOrderId);
   if(cumulative === null) return null;
-  const totalDemand = cumulative + (extraQty || 0);
+  const totalDemand = cumulative.remaining + (extraQty || 0);
   const mat = materials.find(m => m.id === materialId);
-  const stockpile = mat ? (Number(mat.stockpile) || 0) : 0;
+  const rawStockpile = mat ? (Number(mat.stockpile) || 0) : 0;
   const rate = mat ? (Number(mat.productionPerDay) || 0) : 0;
+  const stockpile = Math.max(0, rawStockpile - cumulative.produced);
   const shortfall = Math.max(0, totalDemand - stockpile);
   let days = 0;
   let unknown = false;
